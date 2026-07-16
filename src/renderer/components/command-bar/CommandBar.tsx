@@ -1,0 +1,170 @@
+import {
+  BellOff,
+  CheckCircle2,
+  Gauge,
+  Loader2,
+  RefreshCcw,
+  RotateCcw,
+  Settings,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
+import type {
+  AudioPreferences,
+  AuthStateSnapshot,
+  SessionSnapshot,
+} from '../../../shared/domain/types';
+
+interface CommandBarProps {
+  appVersion: string;
+  auth: AuthStateSnapshot;
+  sessions: SessionSnapshot[];
+  audio: AudioPreferences;
+  onOpenSettings: () => void;
+  onToggleFocusMode: () => void;
+  onReloadAll: () => void;
+  onCheckConnection: () => void;
+  onRefreshCredentials: () => void;
+  onToggleAudio: () => void;
+}
+
+export function CommandBar({
+  appVersion,
+  auth,
+  sessions,
+  audio,
+  onOpenSettings,
+  onToggleFocusMode,
+  onReloadAll,
+  onCheckConnection,
+  onRefreshCredentials,
+  onToggleAudio,
+}: CommandBarProps) {
+  const running = sessions.filter((session) => session.runtime.processState === 'running').length;
+  const busy = sessions.filter((session) => session.runtime.activityState === 'active').length;
+  const awaiting = sessions.filter(
+    (session) =>
+      session.runtime.activityState === 'likelyAwaitingInput' ||
+      session.runtime.activityState === 'possiblePermissionPrompt',
+  ).length;
+  const attention = sessions.filter((session) => session.runtime.attention).length;
+  const AudioIcon = audio.masterEnabled ? Volume2 : VolumeX;
+
+  return (
+    <header className="command-bar">
+      <div className="brand-block" aria-label={`Claude Command Deck version ${appVersion}`}>
+        <div className="brand-mark" aria-hidden="true">
+          <Gauge size={18} />
+        </div>
+        <div>
+          <h1>Claude Command Deck</h1>
+          <span>Local session command center</span>
+        </div>
+      </div>
+
+      <div className="auth-summary" aria-label={`Authentication status: ${auth.label}`}>
+        {auth.status === 'checking' ? (
+          <Loader2 className="spin" size={16} aria-hidden="true" />
+        ) : (
+          <CheckCircle2 size={16} aria-hidden="true" />
+        )}
+        <div>
+          <strong>{auth.label}</strong>
+          <span>
+            {auth.lastSuccessfulCheckAt ? `Last check ${auth.lastSuccessfulCheckAt}` : auth.details}
+          </span>
+        </div>
+      </div>
+
+      <div className="count-strip" aria-label="Session counts">
+        <Metric label="Running" value={running} />
+        <Metric label="Busy" value={busy} />
+        <Metric label="Awaiting" value={awaiting} />
+        <Metric label="Attention" value={attention} tone={attention > 0 ? 'warning' : 'neutral'} />
+      </div>
+
+      <div className="command-actions">
+        <button
+          className="control-button"
+          type="button"
+          title="Check Connection"
+          aria-label="Check Connection"
+          onClick={onCheckConnection}
+        >
+          <CheckCircle2 size={16} aria-hidden="true" />
+          <span>Check</span>
+        </button>
+        <button
+          className="control-button"
+          type="button"
+          title="Refresh Credentials"
+          aria-label="Refresh Credentials"
+          onClick={onRefreshCredentials}
+        >
+          <RefreshCcw size={16} aria-hidden="true" />
+          <span>Refresh</span>
+        </button>
+        <button
+          className="control-button primary"
+          type="button"
+          title="Reload All sessions"
+          aria-label="Reload All sessions"
+          onClick={onReloadAll}
+        >
+          <RotateCcw size={16} aria-hidden="true" />
+          <span>Reload All</span>
+        </button>
+        <button
+          className="icon-button"
+          type="button"
+          title={audio.masterEnabled ? 'Mute sounds' : 'Unmute sounds'}
+          aria-label={audio.masterEnabled ? 'Mute sounds' : 'Unmute sounds'}
+          onClick={onToggleAudio}
+        >
+          <AudioIcon size={17} aria-hidden="true" />
+        </button>
+        {audio.doNotDisturb ? (
+          <span className="dnd-indicator" title="Do Not Disturb active">
+            <BellOff size={15} aria-hidden="true" />
+            DND
+          </span>
+        ) : null}
+        <button
+          className="icon-button"
+          type="button"
+          title="Toggle focused-session mode"
+          aria-label="Toggle focused-session mode"
+          onClick={onToggleFocusMode}
+        >
+          <Gauge size={17} aria-hidden="true" />
+        </button>
+        <button
+          className="icon-button"
+          type="button"
+          title="Open Settings"
+          aria-label="Open Settings"
+          onClick={onOpenSettings}
+        >
+          <Settings size={17} aria-hidden="true" />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: number;
+  tone?: 'neutral' | 'warning';
+}) {
+  return (
+    <span className={`metric metric-${tone}`}>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </span>
+  );
+}

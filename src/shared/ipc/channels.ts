@@ -1,0 +1,28 @@
+export const IPC_CHANNELS = {
+  appGetState: 'app:get-state',
+  appOpenExternalDirectory: 'app:open-external-directory',
+  appOpenLogDirectory: 'app:open-log-directory',
+  appSelectDirectory: 'app:select-directory',
+  appUpdateAudioPreferences: 'app:update-audio-preferences',
+  appUpdateNotificationPreferences: 'app:update-notification-preferences',
+  appUpdateSessionAudioPreferences: 'app:update-session-audio-preferences',
+  claudeDiscover: 'claude:discover',
+  authCheck: 'auth:check',
+  authStartRefresh: 'auth:start-refresh',
+  authWrite: 'auth:write',
+  authResize: 'auth:resize',
+  authStopRefresh: 'auth:stop-refresh',
+  authOutput: 'auth:output',
+  authExit: 'auth:exit',
+  terminalStartShell: 'terminal:start-shell',
+  terminalStartClaude: 'terminal:start-claude',
+  terminalWrite: 'terminal:write',
+  terminalResize: 'terminal:resize',
+  terminalStop: 'terminal:stop',
+  terminalGetSnapshots: 'terminal:get-snapshots',
+  terminalOutput: 'terminal:output',
+  terminalExit: 'terminal:exit',
+  terminalState: 'terminal:state',
+} as const;
+
+export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
