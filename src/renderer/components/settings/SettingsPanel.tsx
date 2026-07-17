@@ -620,6 +620,7 @@ function ArgsField({
         className="settings-text-input settings-text-area"
         defaultValue={valueText}
         placeholder={placeholder}
+        onChange={(event) => commit(event.currentTarget.value)}
         onBlur={(event) => commit(event.currentTarget.value)}
       />
     </label>

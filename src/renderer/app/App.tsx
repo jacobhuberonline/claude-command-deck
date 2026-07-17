@@ -435,6 +435,34 @@ export function App() {
   }
 
   async function updateAuthConfiguration(auth: AuthConfiguration) {
+    const authSummary =
+      auth.provider === 'disabled'
+        ? {
+            status: 'notConfigured' as const,
+            label: 'Authentication disabled',
+            details: 'Authentication monitoring is disabled.',
+          }
+        : auth.checkExecutable.trim()
+          ? {
+              status:
+                appStateRef.current.auth.status === 'notConfigured'
+                  ? ('notConfigured' as const)
+                  : appStateRef.current.auth.status,
+              label:
+                appStateRef.current.auth.status === 'notConfigured'
+                  ? 'Ready to check'
+                  : appStateRef.current.auth.label,
+              details:
+                appStateRef.current.auth.status === 'notConfigured'
+                  ? 'Click Check Connection to validate credentials.'
+                  : appStateRef.current.auth.details,
+            }
+          : {
+              status: 'notConfigured' as const,
+              label: 'AWS not configured',
+              details: 'Configure a credential check command in Settings.',
+            };
+
     setAppState((current) => ({
       ...current,
       settings: {
@@ -444,12 +472,7 @@ export function App() {
       auth: {
         ...current.auth,
         provider: auth.provider,
-        status: auth.provider === 'disabled' ? 'notConfigured' : current.auth.status,
-        label: auth.provider === 'disabled' ? 'Authentication disabled' : current.auth.label,
-        details:
-          auth.provider === 'disabled'
-            ? 'Authentication monitoring is disabled.'
-            : current.auth.details,
+        ...authSummary,
       },
     }));
 

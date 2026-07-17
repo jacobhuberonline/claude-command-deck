@@ -226,11 +226,17 @@ export function createAppStateFromSettings(
       provider: settings.auth.provider,
       status: settings.auth.provider === 'disabled' ? 'notConfigured' : 'notConfigured',
       label:
-        settings.auth.provider === 'disabled' ? 'Authentication disabled' : 'AWS not configured',
+        settings.auth.provider === 'disabled'
+          ? 'Authentication disabled'
+          : settings.auth.checkExecutable.trim()
+            ? 'Ready to check'
+            : 'AWS not configured',
       details:
         settings.auth.provider === 'disabled'
           ? 'Authentication monitoring is disabled.'
-          : 'Configure or test a credential check command in Settings.',
+          : settings.auth.checkExecutable.trim()
+            ? 'Click Check Connection to validate credentials.'
+            : 'Configure a credential check command in Settings.',
     },
     settings,
     diagnostics: [
