@@ -52,6 +52,18 @@ describe('phase 4 Claude command builder', () => {
     expect(result.strategy).toBe('resumeSpecific');
   });
 
+  it('constructs resume picker when no known session id is provided', () => {
+    const result = buildClaudeCommand({
+      executable: 'claude',
+      baseArgs: [],
+      launchMode: 'resumeSpecific',
+      capabilities,
+    });
+
+    expect(result.args).toEqual(['--resume']);
+    expect(result.strategy).toBe('resumeSpecific');
+  });
+
   it('falls back honestly when continuation is unsupported', () => {
     const result = buildClaudeCommand({
       executable: 'claude',

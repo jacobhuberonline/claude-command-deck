@@ -51,12 +51,12 @@ async function bootstrap(): Promise<void> {
   });
   processManager = new ProcessManager(logger, {
     onOutput: (sessionId, data) => broadcastTerminalOutput({ sessionId, data }),
-    onExit: (sessionId, exitCode, signal) =>
+    onExit: (sessionId, exitCode, signal, crashed) =>
       broadcastTerminalExit({
         sessionId,
         exitCode,
         signal,
-        crashed: exitCode !== 0,
+        crashed,
       }),
     onState: (sessionId, snapshot) => broadcastTerminalState({ sessionId, snapshot }),
   });

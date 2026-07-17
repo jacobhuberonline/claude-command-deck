@@ -14,7 +14,12 @@ import { PtyProcess } from './PtyProcess';
 
 interface ProcessManagerEvents {
   onOutput: (sessionId: SessionId, data: string) => void;
-  onExit: (sessionId: SessionId, exitCode: number | null, signal: string | null) => void;
+  onExit: (
+    sessionId: SessionId,
+    exitCode: number | null,
+    signal: string | null,
+    crashed: boolean,
+  ) => void;
   onState: (sessionId: SessionId, snapshot: ManagedProcessSnapshot) => void;
 }
 
@@ -173,8 +178,9 @@ export class ProcessManager {
       onData: (activeSessionId, data) => this.enqueueOutput(activeSessionId, data),
       onExit: (activeSessionId, exitCode, signal) => {
         this.flushOutput(activeSessionId);
+        const crashed = process.snapshot().state === 'crashed';
         this.processes.delete(activeSessionId);
-        this.events.onExit(activeSessionId, exitCode, signal);
+        this.events.onExit(activeSessionId, exitCode, signal, crashed);
       },
       onState: (activeSessionId, snapshot) => this.events.onState(activeSessionId, snapshot),
     });

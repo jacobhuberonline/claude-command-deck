@@ -13,6 +13,7 @@ import type {
   ProcessState,
   SessionAudioPreferences,
   SessionId,
+  SessionLaunchMode,
   SettingsSection,
 } from '../../shared/domain/types';
 import type { CommandDeckBridge } from '../../shared/ipc/contracts';
@@ -668,7 +669,7 @@ export function App() {
 
   async function launchClaude(
     sessionId: SessionId,
-    launchMode: 'new' | 'continueMostRecent',
+    launchMode: Exclude<SessionLaunchMode, 'custom'>,
   ): Promise<boolean> {
     const session = appState.sessions.find((candidate) => candidate.configuration.id === sessionId);
     if (!session) {
@@ -702,7 +703,9 @@ export function App() {
       statusMessage:
         command.strategy === 'continueMostRecent'
           ? 'Starting Claude Code with continue-most-recent strategy.'
-          : 'Starting Claude Code PTY.',
+          : command.strategy === 'resumeSpecific'
+            ? 'Starting Claude Code resume picker.'
+            : 'Starting Claude Code PTY.',
       activityState: 'unknown',
       attention: false,
     });
@@ -781,16 +784,13 @@ export function App() {
     return launched;
   }
 
-  async function freshRestart(
-    sessionId: SessionId,
-    options: { skipConfirm?: boolean } = {},
-  ): Promise<boolean> {
+  async function startNewClaude(sessionId: SessionId): Promise<boolean> {
     const session = appState.sessions.find((candidate) => candidate.configuration.id === sessionId);
     if (!session) {
       return false;
     }
 
-    if (!options.skipConfirm && isBusy(session.runtime.activityState)) {
+    if (isBusy(session.runtime.activityState)) {
       const confirmed = window.confirm(
         'This session may be busy or awaiting input. Start a fresh conversation now?',
       );
@@ -799,9 +799,46 @@ export function App() {
       }
     }
 
+    if (session.runtime.processState !== 'empty' && session.runtime.processState !== 'stopped') {
+      await stopForRestart(sessionId);
+      await delay(350);
+    }
+
+    return launchClaude(sessionId, 'new');
+  }
+
+  async function launchFromMode(sessionId: SessionId, launchMode: SessionLaunchMode) {
+    if (launchMode === 'continueMostRecent') {
+      await reloadContinue(sessionId);
+      return;
+    }
+
+    if (launchMode === 'resumeSpecific') {
+      await resumeClaude(sessionId);
+      return;
+    }
+
+    await startNewClaude(sessionId);
+  }
+
+  async function resumeClaude(sessionId: SessionId): Promise<boolean> {
+    const session = appState.sessions.find((candidate) => candidate.configuration.id === sessionId);
+    if (!session) {
+      return false;
+    }
+
+    if (isBusy(session.runtime.activityState)) {
+      const confirmed = window.confirm(
+        'This session may be busy or awaiting input. Open the Claude resume picker now?',
+      );
+      if (!confirmed) {
+        return false;
+      }
+    }
+
     await stopForRestart(sessionId);
     await delay(350);
-    return launchClaude(sessionId, 'new');
+    return launchClaude(sessionId, 'resumeSpecific');
   }
 
   async function reloadAll() {
@@ -1050,14 +1087,8 @@ export function App() {
           onStartShell={(sessionId) => {
             void startShell(sessionId);
           }}
-          onStartClaude={(sessionId) => {
-            void launchClaude(sessionId, 'new');
-          }}
-          onReloadContinue={(sessionId) => {
-            void reloadContinue(sessionId);
-          }}
-          onFreshRestart={(sessionId) => {
-            void freshRestart(sessionId);
+          onLaunchClaude={(sessionId, launchMode) => {
+            void launchFromMode(sessionId, launchMode);
           }}
           onSelectDirectory={(sessionId) => {
             void selectDirectory(sessionId);

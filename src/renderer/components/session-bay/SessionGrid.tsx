@@ -1,4 +1,4 @@
-import type { SessionId, SessionSnapshot } from '../../../shared/domain/types';
+import type { SessionId, SessionLaunchMode, SessionSnapshot } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
 import { SessionBay } from './SessionBay';
 
@@ -10,9 +10,7 @@ interface SessionGridProps {
   onToggleFocusMode: () => void;
   onOpenSettings: () => void;
   onStartShell: (sessionId: SessionId) => void;
-  onStartClaude: (sessionId: SessionId) => void;
-  onReloadContinue: (sessionId: SessionId) => void;
-  onFreshRestart: (sessionId: SessionId) => void;
+  onLaunchClaude: (sessionId: SessionId, launchMode: SessionLaunchMode) => void;
   onSelectDirectory: (sessionId: SessionId) => void;
   onOpenDirectory: (sessionId: SessionId) => void;
   onStopSession: (sessionId: SessionId) => void;
@@ -27,9 +25,7 @@ export function SessionGrid({
   onToggleFocusMode,
   onOpenSettings,
   onStartShell,
-  onStartClaude,
-  onReloadContinue,
-  onFreshRestart,
+  onLaunchClaude,
   onSelectDirectory,
   onOpenDirectory,
   onStopSession,
@@ -49,9 +45,7 @@ export function SessionGrid({
           onToggleFocusMode={onToggleFocusMode}
           onOpenSettings={onOpenSettings}
           onStartShell={onStartShell}
-          onStartClaude={onStartClaude}
-          onReloadContinue={onReloadContinue}
-          onFreshRestart={onFreshRestart}
+          onLaunchClaude={onLaunchClaude}
           onSelectDirectory={onSelectDirectory}
           onOpenDirectory={onOpenDirectory}
           onStopSession={onStopSession}
@@ -68,9 +62,7 @@ export function SessionGrid({
               onToggleFocusMode={onToggleFocusMode}
               onOpenSettings={onOpenSettings}
               onStartShell={onStartShell}
-              onStartClaude={onStartClaude}
-              onReloadContinue={onReloadContinue}
-              onFreshRestart={onFreshRestart}
+              onLaunchClaude={onLaunchClaude}
               onSelectDirectory={onSelectDirectory}
               onOpenDirectory={onOpenDirectory}
               onStopSession={onStopSession}
@@ -93,9 +85,7 @@ export function SessionGrid({
           onToggleFocusMode={onToggleFocusMode}
           onOpenSettings={onOpenSettings}
           onStartShell={onStartShell}
-          onStartClaude={onStartClaude}
-          onReloadContinue={onReloadContinue}
-          onFreshRestart={onFreshRestart}
+          onLaunchClaude={onLaunchClaude}
           onSelectDirectory={onSelectDirectory}
           onOpenDirectory={onOpenDirectory}
           onStopSession={onStopSession}

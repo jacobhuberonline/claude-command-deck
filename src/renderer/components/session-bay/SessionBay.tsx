@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   AlertTriangle,
   FolderOpen,
@@ -5,11 +6,10 @@ import {
   Maximize2,
   MoreHorizontal,
   Play,
-  RotateCcw,
   Square,
   TerminalSquare,
 } from 'lucide-react';
-import type { SessionId, SessionSnapshot } from '../../../shared/domain/types';
+import type { SessionId, SessionLaunchMode, SessionSnapshot } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
 import { TerminalPane } from '../terminal/TerminalPane';
 
@@ -22,9 +22,7 @@ interface SessionBayProps {
   onToggleFocusMode: () => void;
   onOpenSettings: () => void;
   onStartShell: (sessionId: SessionId) => void;
-  onStartClaude: (sessionId: SessionId) => void;
-  onReloadContinue: (sessionId: SessionId) => void;
-  onFreshRestart: (sessionId: SessionId) => void;
+  onLaunchClaude: (sessionId: SessionId, launchMode: SessionLaunchMode) => void;
   onSelectDirectory: (sessionId: SessionId) => void;
   onOpenDirectory: (sessionId: SessionId) => void;
   onStopSession: (sessionId: SessionId) => void;
@@ -62,9 +60,7 @@ export function SessionBay({
   onToggleFocusMode,
   onOpenSettings,
   onStartShell,
-  onStartClaude,
-  onReloadContinue,
-  onFreshRestart,
+  onLaunchClaude,
   onSelectDirectory,
   onOpenDirectory,
   onStopSession,
@@ -78,6 +74,9 @@ export function SessionBay({
   const showTerminal = !isCompact;
   const directoryChangeDisabled = ['starting', 'running', 'restarting', 'stopping'].includes(
     runtime.processState,
+  );
+  const [selectedLaunchMode, setSelectedLaunchMode] = useState<SessionLaunchMode>(
+    configuration.launchMode,
   );
 
   return (
@@ -147,13 +146,25 @@ export function SessionBay({
             if (runtime.processState === 'empty' || !configuration.workingDirectory) {
               void onSelectDirectory(configuration.id);
             } else {
-              void onStartClaude(configuration.id);
+              void onLaunchClaude(configuration.id, selectedLaunchMode);
             }
           }}
         >
           <Play size={15} aria-hidden="true" />
-          <span>{runtime.processState === 'empty' ? 'Select Directory' : 'Start Claude'}</span>
+          <span>{runtime.processState === 'empty' ? 'Select Directory' : 'Launch'}</span>
         </button>
+        {configuration.workingDirectory ? (
+          <select
+            className="launch-mode-select"
+            aria-label={`${configuration.name} launch mode`}
+            value={selectedLaunchMode}
+            onChange={(event) => setSelectedLaunchMode(event.target.value as SessionLaunchMode)}
+          >
+            <option value="new">New</option>
+            <option value="continueMostRecent">Continue</option>
+            <option value="resumeSpecific">Resume...</option>
+          </select>
+        ) : null}
         <button
           className="control-button"
           type="button"
@@ -163,26 +174,6 @@ export function SessionBay({
         >
           <TerminalSquare size={15} aria-hidden="true" />
           <span>Shell</span>
-        </button>
-        <button
-          className="control-button"
-          type="button"
-          onClick={() => {
-            void onReloadContinue(configuration.id);
-          }}
-        >
-          <RotateCcw size={15} aria-hidden="true" />
-          <span>Reload & Continue</span>
-        </button>
-        <button
-          className="control-button"
-          type="button"
-          onClick={() => {
-            void onFreshRestart(configuration.id);
-          }}
-        >
-          <RotateCcw size={15} aria-hidden="true" />
-          <span>Fresh</span>
         </button>
         <button
           className="icon-button quiet"

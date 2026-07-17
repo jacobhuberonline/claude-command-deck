@@ -78,7 +78,7 @@ export class PtyProcess {
     this.process.onExit((event) => {
       this.exitCode = event.exitCode;
       this.signal = event.signal === undefined ? null : String(event.signal);
-      this.state = event.exitCode === 0 ? 'stopped' : 'crashed';
+      this.state = this.state === 'stopping' || event.exitCode === 0 ? 'stopped' : 'crashed';
       this.options.logger.info('PTY exited', {
         sessionId: this.options.sessionId,
         pid: this.process?.pid,

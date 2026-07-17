@@ -38,13 +38,16 @@ export function buildClaudeCommand(input: ClaudeCommandBuildInput): ClaudeComman
 
   if (
     input.launchMode === 'resumeSpecific' &&
-    input.knownSessionIdentifier &&
     input.capabilities.resumeSpecific &&
     input.capabilities.resumeFlag
   ) {
     return {
       executable: input.executable,
-      args: [...baseArgs, input.capabilities.resumeFlag, input.knownSessionIdentifier],
+      args: [
+        ...baseArgs,
+        input.capabilities.resumeFlag,
+        ...(input.knownSessionIdentifier ? [input.knownSessionIdentifier] : []),
+      ],
       strategy: 'resumeSpecific',
       warnings: [],
     };

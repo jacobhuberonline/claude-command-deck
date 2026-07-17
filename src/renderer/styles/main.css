@@ -170,6 +170,7 @@ h1 {
 .control-button,
 .icon-button,
 .terminal-tool,
+.launch-mode-select,
 .settings-nav button {
   border: 1px solid rgba(124, 151, 171, 0.22);
   border-radius: 7px;
@@ -191,6 +192,14 @@ h1 {
 .control-button.primary {
   border-color: rgba(105, 201, 216, 0.42);
   background: rgba(73, 142, 164, 0.24);
+}
+
+.launch-mode-select {
+  min-height: 28px;
+  max-width: 112px;
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .icon-button,

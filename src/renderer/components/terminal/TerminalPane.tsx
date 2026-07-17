@@ -161,9 +161,13 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     const offExit = terminalBridge.onExit((event) => {
       if (event.sessionId === session.configuration.id) {
         terminal.writeln('');
-        terminal.writeln(
-          `\x1b[33mLOCAL SYSTEM\x1b[0m Process exited with code ${event.exitCode ?? 'unknown'}.`,
-        );
+        if (event.crashed) {
+          terminal.writeln(
+            `\x1b[31mLOCAL SYSTEM\x1b[0m Process exited unexpectedly with code ${event.exitCode ?? 'unknown'}.`,
+          );
+        } else {
+          terminal.writeln('\x1b[33mLOCAL SYSTEM\x1b[0m Process stopped.');
+        }
       }
     });
 
