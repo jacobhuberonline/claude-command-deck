@@ -6,6 +6,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import type { SessionSnapshot } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
+import { recordTerminalSize } from '../../services/terminal/TerminalSizeRegistry';
 
 interface TerminalPaneProps {
   session: SessionSnapshot;
@@ -20,6 +21,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const initialStatusMessageRef = useRef(session.runtime.statusMessage);
+  const resizeTerminalRef = useRef<() => void>(() => undefined);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const pasteClipboard = useCallback(() => {
@@ -121,6 +123,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     const resize = () => {
       try {
         fitAddon.fit();
+        recordTerminalSize(session.configuration.id, terminal.cols, terminal.rows);
         void terminalBridge.resize({
           sessionId: session.configuration.id,
           cols: terminal.cols,
@@ -130,6 +133,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
         // xterm fit can fail while an element is hidden during layout transitions.
       }
     };
+    resizeTerminalRef.current = resize;
 
     const resizeObserver =
       typeof ResizeObserver === 'undefined'
@@ -159,8 +163,31 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       terminalRef.current = null;
       fitAddonRef.current = null;
       searchAddonRef.current = null;
+      resizeTerminalRef.current = () => undefined;
     };
   }, [pasteClipboard, session.configuration.id, session.configuration.scrollback, terminalBridge]);
+
+  useEffect(() => {
+    if (
+      isTestRuntime ||
+      (session.runtime.processState !== 'starting' && session.runtime.processState !== 'running')
+    ) {
+      return undefined;
+    }
+
+    let retryTimer: number | undefined;
+    const animationFrame = window.requestAnimationFrame(() => {
+      resizeTerminalRef.current();
+      retryTimer = window.setTimeout(() => resizeTerminalRef.current(), 80);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
+    };
+  }, [session.runtime.processState]);
 
   const copySelection = () => {
     const selection = terminalRef.current?.getSelection();

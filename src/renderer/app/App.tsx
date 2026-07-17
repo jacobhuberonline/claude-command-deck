@@ -26,6 +26,7 @@ import {
 } from '../services/activity/ActivityClassifier';
 import { AudioService, defaultSoundRegistry } from '../services/audio/AudioService';
 import { DesktopNotificationService } from '../services/audio/DesktopNotificationService';
+import { getTerminalSize } from '../services/terminal/TerminalSizeRegistry';
 
 const fallbackBridge = {
   getAppState: () => Promise.resolve(createPhaseOneState('browser-preview')),
@@ -645,11 +646,12 @@ export function App() {
       attention: false,
     });
 
+    const terminalSize = getTerminalSize(sessionId);
     const result = await bridge.terminal.startShell({
       sessionId,
       workingDirectory: session.configuration.workingDirectory,
-      cols: 100,
-      rows: 28,
+      cols: terminalSize.cols,
+      rows: terminalSize.rows,
     });
 
     if (!result.ok) {
@@ -703,13 +705,14 @@ export function App() {
       attention: false,
     });
 
+    const terminalSize = getTerminalSize(sessionId);
     const result = await bridge.terminal.startClaude({
       sessionId,
       workingDirectory: session.configuration.workingDirectory,
       executable: command.executable,
       args: command.args,
-      cols: 100,
-      rows: 28,
+      cols: terminalSize.cols,
+      rows: terminalSize.rows,
     });
 
     if (!result.ok) {
