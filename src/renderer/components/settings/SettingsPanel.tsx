@@ -603,21 +603,24 @@ function ArgsField({
   placeholder?: string;
   onChange: (value: string[]) => void;
 }) {
+  const valueText = value.join('\n');
+  const commit = (draft: string) => {
+    onChange(
+      draft
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    );
+  };
+
   return (
     <label className="settings-field settings-field-stack">
       <span>{label}</span>
       <textarea
         className="settings-text-input settings-text-area"
-        value={value.join('\n')}
+        defaultValue={valueText}
         placeholder={placeholder}
-        onChange={(event) => {
-          onChange(
-            event.currentTarget.value
-              .split('\n')
-              .map((item) => item.trim())
-              .filter(Boolean),
-          );
-        }}
+        onBlur={(event) => commit(event.currentTarget.value)}
       />
     </label>
   );
