@@ -17,6 +17,7 @@ const isTestRuntime = import.meta.env.MODE === 'test';
 const DEFAULT_TERMINAL_FONT_SIZE = 12;
 const MIN_TERMINAL_FONT_SIZE = 9;
 const MAX_TERMINAL_FONT_SIZE = 22;
+const KEYBOARD_PASTE_SUPPRESSION_MS = 750;
 
 function clampTerminalFontSize(value: number) {
   return Math.min(MAX_TERMINAL_FONT_SIZE, Math.max(MIN_TERMINAL_FONT_SIZE, value));
@@ -31,6 +32,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
   const resizeTerminalRef = useRef<() => void>(() => undefined);
   const fontSizeRef = useRef(DEFAULT_TERMINAL_FONT_SIZE);
   const lastWriteErrorRef = useRef<string | null>(null);
+  const suppressNativePasteUntilRef = useRef(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const setTerminalFontSize = useCallback((nextFontSize: number) => {
@@ -118,6 +120,9 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
           return true;
         }
 
+        event.preventDefault();
+        event.stopPropagation();
+        suppressNativePasteUntilRef.current = Date.now() + KEYBOARD_PASTE_SUPPRESSION_MS;
         void navigator.clipboard
           .readText()
           .then((text) => {
@@ -208,6 +213,16 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     resizeObserver?.observe(container);
     window.requestAnimationFrame(resize);
 
+    const onNativePaste = (event: ClipboardEvent) => {
+      if (Date.now() > suppressNativePasteUntilRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    container.addEventListener('paste', onNativePaste, true);
+
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) {
         return;
@@ -219,6 +234,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     container.addEventListener('wheel', onWheel, { passive: false });
 
     return () => {
+      container.removeEventListener('paste', onNativePaste, true);
       container.removeEventListener('wheel', onWheel);
       resizeObserver?.disconnect();
       offOutput();
