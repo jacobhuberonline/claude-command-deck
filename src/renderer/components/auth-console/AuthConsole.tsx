@@ -82,7 +82,13 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
             className="control-button"
             type="button"
             onClick={() => {
-              void authBridge.startRefresh();
+              void authBridge.startRefresh().then((result) => {
+                if (result.ok) {
+                  terminalRef.current?.writeln('\x1b[33mLOCAL SYSTEM\x1b[0m Starting refresh.');
+                } else {
+                  terminalRef.current?.writeln(`\x1b[31mLOCAL SYSTEM\x1b[0m ${result.error}`);
+                }
+              });
             }}
           >
             Start refresh

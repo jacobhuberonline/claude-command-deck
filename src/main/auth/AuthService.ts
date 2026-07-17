@@ -49,7 +49,8 @@ export class AuthService {
     }
 
     try {
-      this.refreshProcess = pty.spawn(auth.refreshExecutable, auth.refreshArgs, {
+      const command = buildRefreshCommand(auth.refreshExecutable, auth.refreshArgs, auth.shellMode);
+      this.refreshProcess = pty.spawn(command.executable, command.args, {
         name: 'xterm-256color',
         cols: 100,
         rows: 24,
@@ -65,6 +66,7 @@ export class AuthService {
 
     this.logger.info('Authentication refresh PTY started', {
       executable: auth.refreshExecutable,
+      shellMode: auth.shellMode,
       workingDirectory: auth.workingDirectory || process.cwd(),
     });
     this.refreshProcess.onData((data) => this.events.onOutput(data));
@@ -197,6 +199,42 @@ export class AuthService {
       });
     });
   }
+}
+
+function buildRefreshCommand(executable: string, args: string[], shellMode: boolean) {
+  if (!shellMode) {
+    return { executable, args };
+  }
+
+  const commandLine = [executable, ...args].map(quoteShellArgument).join(' ');
+
+  if (process.platform === 'win32') {
+    return {
+      executable: process.env.ComSpec || 'cmd.exe',
+      args: ['/d', '/s', '/c', commandLine],
+    };
+  }
+
+  return {
+    executable: process.env.SHELL || '/bin/sh',
+    args: ['-lc', commandLine],
+  };
+}
+
+function quoteShellArgument(value: string) {
+  if (!value) {
+    return '""';
+  }
+
+  if (!/[\s"&|<>^]/.test(value)) {
+    return value;
+  }
+
+  if (process.platform === 'win32') {
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function windowlessTimeout(callback: () => void, ms: number) {
