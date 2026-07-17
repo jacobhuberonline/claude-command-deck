@@ -95,8 +95,14 @@ export function SessionBay({
         <button
           className="bay-title"
           type="button"
-          onClick={onFocus}
-          title={configuration.workingDirectory || 'No directory selected'}
+          disabled={directoryChangeDisabled}
+          onClick={() => onSelectDirectory(configuration.id)}
+          title={
+            directoryChangeDisabled
+              ? 'Stop the session before changing directory'
+              : configuration.workingDirectory || 'Select directory'
+          }
+          aria-label={`Change directory for ${configuration.name}`}
         >
           <span className="status-dot" aria-hidden="true" />
           <span>
@@ -112,7 +118,12 @@ export function SessionBay({
             type="button"
             title="Focus session"
             aria-label={`Focus ${configuration.name}`}
-            onClick={onToggleFocusMode}
+            onClick={() => {
+              onFocus();
+              if (!isCompact) {
+                onToggleFocusMode();
+              }
+            }}
           >
             <Maximize2 size={15} aria-hidden="true" />
           </button>

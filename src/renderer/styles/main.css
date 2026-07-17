@@ -368,6 +368,11 @@ h1 {
   text-align: left;
 }
 
+.bay-title:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .bay-title strong {
   display: block;
   overflow: hidden;

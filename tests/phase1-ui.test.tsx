@@ -51,6 +51,32 @@ describe('phase 1 visual shell', () => {
     terminal.remove();
   });
 
+  it('opens the directory picker from the session title', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    const selectDirectory = vi.fn(() =>
+      Promise.resolve({
+        ok: false as const,
+        error: 'Not available.',
+        cancelled: true,
+      }),
+    );
+    window.commandDeck = {
+      ...createMockBridge(snapshot),
+      selectDirectory,
+    };
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Change directory for Provider API',
+      }),
+    );
+
+    await waitFor(() => expect(selectDirectory).toHaveBeenCalledWith({ sessionId: 'session-2' }));
+  });
+
   it('sends prompts from the GUI workbench without opening the raw terminal', async () => {
     const snapshot = createPhaseOneState('test');
     snapshot.settings.auth.startupChecksEnabled = false;
