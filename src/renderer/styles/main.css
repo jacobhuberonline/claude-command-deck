@@ -207,6 +207,32 @@ h1 {
   background: rgba(12, 17, 23, 0.88);
 }
 
+.auth-status-icon.auth-connected {
+  border-color: rgba(121, 210, 155, 0.42);
+  color: var(--green);
+  background: rgba(121, 210, 155, 0.12);
+}
+
+.auth-status-icon.auth-checking,
+.auth-status-icon.auth-refreshing {
+  border-color: rgba(105, 201, 216, 0.42);
+  color: var(--cyan);
+  background: rgba(105, 201, 216, 0.12);
+}
+
+.auth-status-icon.auth-expiringSoon {
+  border-color: rgba(230, 191, 115, 0.46);
+  color: var(--amber);
+  background: rgba(230, 191, 115, 0.12);
+}
+
+.auth-status-icon.auth-disconnected,
+.auth-status-icon.auth-error {
+  border-color: rgba(237, 129, 129, 0.46);
+  color: var(--red);
+  background: rgba(237, 129, 129, 0.12);
+}
+
 .dnd-indicator {
   gap: 4px;
   min-height: 32px;
@@ -536,56 +562,6 @@ h1 {
   padding: 0 12px;
   border-top: 1px solid rgba(124, 151, 171, 0.16);
   background: rgba(8, 11, 15, 0.95);
-}
-
-.bottom-auth-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  max-width: 46vw;
-  min-height: 24px;
-  padding: 0 9px;
-  border: 1px solid rgba(124, 151, 171, 0.18);
-  border-radius: 999px;
-  color: var(--muted);
-  background: rgba(18, 25, 34, 0.72);
-  cursor: pointer;
-}
-
-.bottom-auth-status strong {
-  flex: 0 0 auto;
-  color: var(--text);
-  font-size: 12px;
-}
-
-.bottom-auth-status span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bottom-auth-status.rail-connected .status-dot {
-  background: var(--green);
-  box-shadow: 0 0 0 3px rgba(121, 210, 155, 0.16);
-}
-
-.bottom-auth-status.rail-checking .status-dot,
-.bottom-auth-status.rail-refreshing .status-dot {
-  background: var(--cyan);
-  box-shadow: 0 0 0 3px rgba(105, 201, 216, 0.16);
-}
-
-.bottom-auth-status.rail-expiringSoon .status-dot {
-  background: var(--amber);
-  box-shadow: 0 0 0 3px rgba(230, 191, 115, 0.16);
-}
-
-.bottom-auth-status.rail-disconnected .status-dot,
-.bottom-auth-status.rail-error .status-dot {
-  background: var(--red);
-  box-shadow: 0 0 0 3px rgba(237, 129, 129, 0.16);
 }
 
 .settings-backdrop {

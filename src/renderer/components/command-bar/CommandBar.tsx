@@ -1,7 +1,9 @@
 import {
   BellOff,
+  CircleAlert,
   CheckCircle2,
   Gauge,
+  Loader2,
   RefreshCcw,
   RotateCcw,
   Settings,
@@ -47,9 +49,6 @@ export function CommandBar({
   const attention = sessions.filter((session) => session.runtime.attention).length;
   const AudioIcon = audio.masterEnabled ? Volume2 : VolumeX;
   const authBusy = auth.status === 'checking' || auth.status === 'refreshing';
-  const authActionLabel =
-    auth.status === 'connected' ? 'Check' : authBusy ? authLabel(auth.status) : 'Connect';
-  const AuthActionIcon = auth.status === 'connected' ? CheckCircle2 : RefreshCcw;
 
   return (
     <header className="command-bar">
@@ -72,15 +71,14 @@ export function CommandBar({
 
       <div className="command-actions">
         <button
-          className="control-button"
+          className={`icon-button auth-status-icon auth-${auth.status}`}
           type="button"
-          title={auth.status === 'connected' ? 'Check Connection' : 'Connect Authentication'}
+          title={`${auth.label}: ${auth.details}`}
           aria-label={auth.status === 'connected' ? 'Check Connection' : 'Connect Authentication'}
           disabled={authBusy}
           onClick={onAuthAction}
         >
-          <AuthActionIcon className={authBusy ? 'spin' : ''} size={16} aria-hidden="true" />
-          <span>{authActionLabel}</span>
+          <AuthStatusIcon status={auth.status} spinning={authBusy} />
         </button>
         <button
           className="control-button primary"
@@ -147,14 +145,24 @@ function Metric({
   );
 }
 
-function authLabel(status: AuthStateSnapshot['status']) {
-  if (status === 'checking') {
-    return 'Checking';
+function AuthStatusIcon({
+  status,
+  spinning,
+}: {
+  status: AuthStateSnapshot['status'];
+  spinning: boolean;
+}) {
+  if (status === 'connected') {
+    return <CheckCircle2 size={17} aria-hidden="true" />;
   }
 
-  if (status === 'refreshing') {
-    return 'Refreshing';
+  if (status === 'checking' || status === 'refreshing') {
+    return <Loader2 className={spinning ? 'spin' : ''} size={17} aria-hidden="true" />;
   }
 
-  return 'Connect';
+  if (status === 'disconnected' || status === 'error' || status === 'expiringSoon') {
+    return <CircleAlert size={17} aria-hidden="true" />;
+  }
+
+  return <RefreshCcw size={17} aria-hidden="true" />;
 }

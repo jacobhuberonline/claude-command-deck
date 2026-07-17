@@ -3,6 +3,7 @@ import { buildClaudeCommand } from '../../shared/claude/ClaudeCommandBuilder';
 import { createPhaseOneState } from '../../shared/domain/defaults';
 import type {
   AppStateSnapshot,
+  AuthCheckResult,
   AuthConfiguration,
   AuthStatus,
   AudioEvent,
@@ -139,6 +140,7 @@ export function App() {
   const bridge = useMemo(() => getBridge(), []);
   const appStateRef = useRef(appState);
   const focusedSessionIdRef = useRef(focusedSessionId);
+  const startupAuthAttemptedRef = useRef(false);
 
   useEffect(() => {
     appStateRef.current = appState;
@@ -893,7 +895,7 @@ export function App() {
     }
   }
 
-  const checkConnection = useCallback(async () => {
+  const checkConnection = useCallback(async (): Promise<AuthCheckResult> => {
     const previousStatus = appStateRef.current.auth.status;
     setAppState((current) => ({
       ...current,
@@ -925,9 +927,11 @@ export function App() {
     if (event) {
       emitSemanticEvents([event]);
     }
+
+    return result;
   }, [bridge, emitSemanticEvents]);
 
-  async function connectAuthentication() {
+  const connectAuthentication = useCallback(async () => {
     if (appStateRef.current.auth.status === 'connected') {
       await checkConnection();
       return;
@@ -955,7 +959,31 @@ export function App() {
         },
       }));
     }
-  }
+  }, [bridge, checkConnection]);
+
+  useEffect(() => {
+    const auth = appState.settings.auth;
+    if (
+      startupAuthAttemptedRef.current ||
+      !auth.startupChecksEnabled ||
+      auth.provider === 'disabled' ||
+      !auth.checkExecutable.trim()
+    ) {
+      return;
+    }
+
+    startupAuthAttemptedRef.current = true;
+    void checkConnection().then((result) => {
+      if (
+        result.status === 'connected' ||
+        !appStateRef.current.settings.auth.refreshExecutable.trim()
+      ) {
+        return;
+      }
+
+      void connectAuthentication();
+    });
+  }, [appState.settings.auth, checkConnection, connectAuthentication]);
 
   useEffect(() => {
     return bridge.auth.onExit((event) => {
@@ -1029,16 +1057,6 @@ export function App() {
       </main>
       <footer className="bottom-status" aria-label="Application status">
         <span>{focusedSession?.configuration.name ?? 'No focused session'}</span>
-        <button
-          className={`bottom-auth-status rail-${appState.auth.status}`}
-          type="button"
-          onClick={() => setSettingsSection('authentication')}
-          title={appState.auth.details}
-        >
-          <span className="status-dot" aria-hidden="true" />
-          <strong>{appState.auth.label}</strong>
-          <span>{appState.auth.details}</span>
-        </button>
         <span>Alt+1-4 focus bays</span>
         <span>Alt+F focus mode</span>
         <span>v{appState.appVersion}</span>
