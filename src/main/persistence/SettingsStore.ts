@@ -76,7 +76,7 @@ export class SettingsStore {
           ? {
               ...session,
               workingDirectory: directory,
-              name: session.name.startsWith('Session ') ? directoryLeaf(directory) : session.name,
+              name: directoryLeaf(directory),
               restoreOnLaunch: false,
             }
           : session,

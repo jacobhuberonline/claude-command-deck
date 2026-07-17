@@ -14,6 +14,7 @@ interface SessionGridProps {
   onReloadContinue: (sessionId: SessionId) => void;
   onFreshRestart: (sessionId: SessionId) => void;
   onSelectDirectory: (sessionId: SessionId) => void;
+  onOpenDirectory: (sessionId: SessionId) => void;
   onStopSession: (sessionId: SessionId) => void;
   terminalBridge: TerminalBridge;
 }
@@ -30,6 +31,7 @@ export function SessionGrid({
   onReloadContinue,
   onFreshRestart,
   onSelectDirectory,
+  onOpenDirectory,
   onStopSession,
   terminalBridge,
 }: SessionGridProps) {
@@ -51,6 +53,7 @@ export function SessionGrid({
           onReloadContinue={onReloadContinue}
           onFreshRestart={onFreshRestart}
           onSelectDirectory={onSelectDirectory}
+          onOpenDirectory={onOpenDirectory}
           onStopSession={onStopSession}
           terminalBridge={terminalBridge}
         />
@@ -69,6 +72,7 @@ export function SessionGrid({
               onReloadContinue={onReloadContinue}
               onFreshRestart={onFreshRestart}
               onSelectDirectory={onSelectDirectory}
+              onOpenDirectory={onOpenDirectory}
               onStopSession={onStopSession}
               terminalBridge={terminalBridge}
             />
@@ -93,6 +97,7 @@ export function SessionGrid({
           onReloadContinue={onReloadContinue}
           onFreshRestart={onFreshRestart}
           onSelectDirectory={onSelectDirectory}
+          onOpenDirectory={onOpenDirectory}
           onStopSession={onStopSession}
           terminalBridge={terminalBridge}
         />

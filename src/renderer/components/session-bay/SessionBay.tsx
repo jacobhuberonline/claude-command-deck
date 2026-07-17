@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   FolderOpen,
+  FolderPen,
   Maximize2,
   MoreHorizontal,
   Play,
@@ -25,6 +26,7 @@ interface SessionBayProps {
   onReloadContinue: (sessionId: SessionId) => void;
   onFreshRestart: (sessionId: SessionId) => void;
   onSelectDirectory: (sessionId: SessionId) => void;
+  onOpenDirectory: (sessionId: SessionId) => void;
   onStopSession: (sessionId: SessionId) => void;
   terminalBridge: TerminalBridge;
 }
@@ -64,6 +66,7 @@ export function SessionBay({
   onReloadContinue,
   onFreshRestart,
   onSelectDirectory,
+  onOpenDirectory,
   onStopSession,
   terminalBridge,
 }: SessionBayProps) {
@@ -213,6 +216,22 @@ export function SessionBay({
           disabled={directoryChangeDisabled}
           onClick={() => {
             void onSelectDirectory(configuration.id);
+          }}
+        >
+          <FolderPen size={15} aria-hidden="true" />
+        </button>
+        <button
+          className="icon-button quiet"
+          type="button"
+          title={
+            configuration.workingDirectory
+              ? 'Open directory in File Explorer'
+              : 'No directory selected'
+          }
+          aria-label="Open directory"
+          disabled={!configuration.workingDirectory}
+          onClick={() => {
+            void onOpenDirectory(configuration.id);
           }}
         >
           <FolderOpen size={15} aria-hidden="true" />

@@ -863,10 +863,7 @@ export function App() {
                 configuration: {
                   ...session.configuration,
                   workingDirectory: result.directory,
-                  name:
-                    session.configuration.name === 'Unassigned Bay'
-                      ? directoryLeaf(result.directory)
-                      : session.configuration.name,
+                  name: directoryLeaf(result.directory),
                 },
                 runtime: {
                   ...session.runtime,
@@ -880,6 +877,17 @@ export function App() {
         ),
       }),
     );
+  }
+
+  async function openSessionDirectory(sessionId: SessionId) {
+    const result = await bridge.openDirectory({ sessionId });
+    if (!result.ok) {
+      updateRuntime(sessionId, {
+        processState: 'error',
+        statusMessage: result.error,
+        attention: true,
+      });
+    }
   }
 
   async function stopSession(sessionId: SessionId) {
@@ -1051,6 +1059,9 @@ export function App() {
           }}
           onSelectDirectory={(sessionId) => {
             void selectDirectory(sessionId);
+          }}
+          onOpenDirectory={(sessionId) => {
+            void openSessionDirectory(sessionId);
           }}
           onStopSession={(sessionId) => {
             void stopSession(sessionId);
