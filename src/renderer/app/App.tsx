@@ -164,6 +164,7 @@ export function App() {
   const appStateRef = useRef(appState);
   const focusedSessionIdRef = useRef(focusedSessionId);
   const startupAuthAttemptedRef = useRef(false);
+  const authRefreshStartInFlightRef = useRef(false);
   const appStateLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -1025,44 +1026,83 @@ export function App() {
   }, [bridge, emitSemanticEvents]);
 
   const startAuthRefresh = useCallback(async () => {
+    if (authRefreshStartInFlightRef.current || appStateRef.current.auth.status === 'refreshing') {
+      return;
+    }
+
+    authRefreshStartInFlightRef.current = true;
     const auth = appStateRef.current.settings.auth;
-    if (!isAuthRefreshConfigured(auth)) {
+
+    let refreshStarted = false;
+
+    try {
+      if (!isAuthRefreshConfigured(auth)) {
+        setAppState((current) => ({
+          ...current,
+          auth: {
+            ...current.auth,
+            status: 'disconnected',
+            label: 'Disconnected',
+            details: 'Credential refresh command is not configured.',
+          },
+        }));
+        return;
+      }
+
+      setAuthConsoleOpen(true);
       setAppState((current) => ({
         ...current,
         auth: {
           ...current.auth,
-          status: 'disconnected',
-          label: 'Disconnected',
-          details: 'Credential refresh command is not configured.',
+          status: 'refreshing',
+          label: 'Refreshing',
+          details: 'Starting credential refresh.',
         },
       }));
-      return;
-    }
 
-    setAuthConsoleOpen(true);
-    setAppState((current) => ({
-      ...current,
-      auth: {
-        ...current.auth,
-        status: 'refreshing',
-        label: 'Refreshing',
-        details: 'Starting credential refresh.',
-      },
-    }));
+      const result = await bridge.auth.startRefresh();
+      if (!result.ok) {
+        setAppState((current) => ({
+          ...current,
+          auth: {
+            ...current.auth,
+            status: 'error',
+            label: 'Authentication error',
+            details: result.error,
+          },
+        }));
+        return;
+      }
 
-    const result = await bridge.auth.startRefresh();
-    if (!result.ok) {
+      refreshStarted = true;
+    } catch (error) {
       setAppState((current) => ({
         ...current,
         auth: {
           ...current.auth,
           status: 'error',
           label: 'Authentication error',
-          details: result.error,
+          details: error instanceof Error ? error.message : 'Unable to start credential refresh.',
         },
       }));
+    } finally {
+      if (!refreshStarted) {
+        authRefreshStartInFlightRef.current = false;
+      }
     }
   }, [bridge]);
+
+  const startConfiguredAuthRefreshAfterCheck = useCallback(
+    (result: AuthCheckResult) => {
+      if (
+        shouldAuthCheckStartRefresh(result.status) &&
+        isAuthRefreshConfigured(appStateRef.current.settings.auth)
+      ) {
+        void startAuthRefresh();
+      }
+    },
+    [startAuthRefresh],
+  );
 
   const connectAuthentication = useCallback(async () => {
     const auth = appStateRef.current.settings.auth;
@@ -1072,7 +1112,7 @@ export function App() {
     }
 
     const result = await checkConnection();
-    if (result.status === 'connected' || result.status === 'notConfigured') {
+    if (!shouldAuthCheckStartRefresh(result.status)) {
       return;
     }
 
@@ -1093,7 +1133,7 @@ export function App() {
     const timeout = window.setTimeout(
       () => {
         if (shouldRunScheduledAuthCheck(appStateRef.current)) {
-          void checkConnection();
+          void checkConnection().then(startConfiguredAuthRefreshAfterCheck);
         }
       },
       Math.max(1000, dueAt - Date.now()),
@@ -1107,6 +1147,7 @@ export function App() {
     appState.settings.auth.checkIntervalSeconds,
     appState.settings.auth.provider,
     checkConnection,
+    startConfiguredAuthRefreshAfterCheck,
   ]);
 
   useEffect(() => {
@@ -1116,7 +1157,7 @@ export function App() {
       }
 
       if (shouldRunScheduledAuthCheck(appStateRef.current)) {
-        void checkConnection();
+        void checkConnection().then(startConfiguredAuthRefreshAfterCheck);
       }
     };
 
@@ -1126,7 +1167,7 @@ export function App() {
       window.removeEventListener('focus', checkIfStale);
       document.removeEventListener('visibilitychange', checkIfStale);
     };
-  }, [checkConnection]);
+  }, [checkConnection, startConfiguredAuthRefreshAfterCheck]);
 
   useEffect(() => {
     const auth = appState.settings.auth;
@@ -1142,19 +1183,14 @@ export function App() {
 
     startupAuthAttemptedRef.current = true;
     void checkConnection().then((result) => {
-      if (
-        result.status === 'connected' ||
-        !isAuthRefreshConfigured(appStateRef.current.settings.auth)
-      ) {
-        return;
-      }
-
-      void startAuthRefresh();
+      startConfiguredAuthRefreshAfterCheck(result);
     });
-  }, [appState.settings.auth, checkConnection, startAuthRefresh]);
+  }, [appState.settings.auth, checkConnection, startConfiguredAuthRefreshAfterCheck]);
 
   useEffect(() => {
     return bridge.auth.onExit((event) => {
+      authRefreshStartInFlightRef.current = false;
+
       if (event.exitCode === 0) {
         void checkConnection();
         return;
@@ -1363,6 +1399,10 @@ function isAuthRefreshConfigured(auth: AuthConfiguration) {
 
 function isAuthBusy(status: AuthStatus) {
   return status === 'checking' || status === 'refreshing';
+}
+
+function shouldAuthCheckStartRefresh(status: AuthStatus) {
+  return status === 'disconnected' || status === 'expiringSoon';
 }
 
 function getAuthCheckIntervalMs(auth: AuthConfiguration) {
