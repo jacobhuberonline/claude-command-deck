@@ -107,6 +107,7 @@ describe('phase 1 visual shell', () => {
     expect(within(article).queryByRole('textbox', { name: /Prompt API Skill Test/i })).toBeNull();
     expect(within(article).queryByRole('button', { name: /Send prompt/i })).toBeNull();
     expect(within(article).queryByRole('button', { name: 'Console' })).toBeNull();
+    expect(within(article).queryByRole('button', { name: 'Paste clipboard' })).toBeNull();
   });
 
   it('starts the shell from the terminal command controls', async () => {

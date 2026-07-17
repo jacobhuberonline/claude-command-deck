@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Clipboard, ClipboardPaste, Eraser, Search, X } from 'lucide-react';
+import { Clipboard, Eraser, Search, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
@@ -55,19 +55,6 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
   const resetTerminalZoom = useCallback(() => {
     setTerminalFontSize(DEFAULT_TERMINAL_FONT_SIZE);
   }, [setTerminalFontSize]);
-
-  const pasteClipboard = useCallback(() => {
-    void navigator.clipboard
-      ?.readText()
-      .then((text) => {
-        if (text) {
-          return terminalBridge.write({ sessionId: session.configuration.id, data: text });
-        }
-
-        return undefined;
-      })
-      .catch(() => undefined);
-  }, [session.configuration.id, terminalBridge]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -126,11 +113,6 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       }
 
       const key = event.key.toLowerCase();
-      if (key === 'v') {
-        pasteClipboard();
-        return false;
-      }
-
       if (key === '+' || key === '=') {
         zoomTerminal(1);
         return false;
@@ -210,14 +192,6 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     resizeObserver?.observe(container);
     window.requestAnimationFrame(resize);
 
-    const onPaste = (event: ClipboardEvent) => {
-      const text = event.clipboardData?.getData('text/plain');
-      if (text) {
-        event.preventDefault();
-        void terminalBridge.write({ sessionId: session.configuration.id, data: text });
-      }
-    };
-    container.addEventListener('paste', onPaste);
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) {
         return;
@@ -229,7 +203,6 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     container.addEventListener('wheel', onWheel, { passive: false });
 
     return () => {
-      container.removeEventListener('paste', onPaste);
       container.removeEventListener('wheel', onWheel);
       resizeObserver?.disconnect();
       offOutput();
@@ -242,7 +215,6 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       resizeTerminalRef.current = () => undefined;
     };
   }, [
-    pasteClipboard,
     resetTerminalZoom,
     session.configuration.id,
     session.configuration.scrollback,
@@ -326,15 +298,6 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
             onClick={copySelection}
           >
             <Clipboard size={14} aria-hidden="true" />
-          </button>
-          <button
-            className="terminal-tool"
-            type="button"
-            title="Paste clipboard"
-            aria-label="Paste clipboard"
-            onClick={pasteClipboard}
-          >
-            <ClipboardPaste size={14} aria-hidden="true" />
           </button>
           <button
             className="terminal-tool"
