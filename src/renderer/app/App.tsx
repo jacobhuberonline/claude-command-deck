@@ -28,6 +28,10 @@ import {
 import { AudioService, defaultSoundRegistry } from '../services/audio/AudioService';
 import { DesktopNotificationService } from '../services/audio/DesktopNotificationService';
 import { getTerminalSize } from '../services/terminal/TerminalSizeRegistry';
+import {
+  parseClaudeUsageOutput,
+  type ClaudeUsageSnapshot,
+} from '../services/usage/ClaudeUsageParser';
 
 const fallbackBridge = {
   getAppState: () => Promise.resolve(createPhaseOneState('browser-preview')),
@@ -107,6 +111,8 @@ const soundAssetNames = [
   'reload-all-warning.wav',
 ];
 
+const usageStorageKey = 'claude-command-deck:last-usage';
+
 function getBridge() {
   return window.commandDeck ?? fallbackBridge;
 }
@@ -115,12 +121,24 @@ function hasDesktopBridge() {
   return Boolean(window.commandDeck);
 }
 
+function loadStoredUsage(): ClaudeUsageSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(usageStorageKey);
+    return raw ? (JSON.parse(raw) as ClaudeUsageSnapshot) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function App() {
   const [appState, setAppState] = useState<AppStateSnapshot>(() => createPhaseOneState('loading'));
   const [focusedSessionId, setFocusedSessionId] = useState<SessionId>('session-1');
   const [focusMode, setFocusMode] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [authConsoleOpen, setAuthConsoleOpen] = useState(false);
+  const [usageSnapshot, setUsageSnapshot] = useState<ClaudeUsageSnapshot | null>(() =>
+    typeof window === 'undefined' ? null : loadStoredUsage(),
+  );
   const activityClassifierRef = useRef(new ActivityClassifier());
   const audioServiceRef = useRef(new AudioService(defaultSoundRegistry));
   const notificationServiceRef = useRef(new DesktopNotificationService());
@@ -309,6 +327,12 @@ export function App() {
     });
 
     const offOutput = bridge.terminal.onOutput(({ sessionId, data }) => {
+      const usage = parseClaudeUsageOutput(data);
+      if (usage) {
+        setUsageSnapshot(usage);
+        window.localStorage.setItem(usageStorageKey, JSON.stringify(usage));
+      }
+
       const activity = activityClassifierRef.current.recordOutput(sessionId, data);
       updateRuntime(sessionId, {
         processState: 'running',
@@ -1059,6 +1083,7 @@ export function App() {
       <CommandBar
         appVersion={appState.appVersion}
         auth={appState.auth}
+        usage={usageSnapshot}
         sessions={appState.sessions}
         audio={appState.settings.audio}
         onOpenSettings={() => setSettingsSection('general')}

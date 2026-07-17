@@ -15,10 +15,12 @@ import type {
   AuthStateSnapshot,
   SessionSnapshot,
 } from '../../../shared/domain/types';
+import type { ClaudeUsageSnapshot } from '../../services/usage/ClaudeUsageParser';
 
 interface CommandBarProps {
   appVersion: string;
   auth: AuthStateSnapshot;
+  usage: ClaudeUsageSnapshot | null;
   sessions: SessionSnapshot[];
   audio: AudioPreferences;
   onOpenSettings: () => void;
@@ -31,6 +33,7 @@ interface CommandBarProps {
 export function CommandBar({
   appVersion,
   auth,
+  usage,
   sessions,
   audio,
   onOpenSettings,
@@ -62,6 +65,15 @@ export function CommandBar({
       </div>
 
       <div className="count-strip" aria-label="Session counts">
+        <Metric
+          label={usage?.label ?? 'Usage'}
+          value={usage ? formatUsd(usage.amountUsd) : '--'}
+          title={
+            usage
+              ? `${usage.source} (${formatObservedAt(usage.observedAt)})`
+              : 'Run /usage in a Claude session to update this.'
+          }
+        />
         <Metric label="Running" value={running} />
         <Metric label="Busy" value={busy} />
         <Metric label="Awaiting" value={awaiting} />
@@ -131,17 +143,34 @@ function Metric({
   label,
   value,
   tone = 'neutral',
+  title,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   tone?: 'neutral' | 'warning';
+  title?: string;
 }) {
   return (
-    <span className={`metric metric-${tone}`}>
+    <span className={`metric metric-${tone}`} title={title}>
       <strong>{value}</strong>
       <span>{label}</span>
     </span>
   );
+}
+
+function formatUsd(amount: number) {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: amount >= 10 ? 0 : 2,
+  }).format(amount);
+}
+
+function formatObservedAt(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
 }
 
 function AuthStatusIcon({
