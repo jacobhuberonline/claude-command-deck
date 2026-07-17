@@ -128,6 +128,23 @@ describe('phase 1 visual shell', () => {
     expect(await within(article).findByText('Terminal test adapter')).toBeInTheDocument();
   });
 
+  it('opens the console when starting the resume picker', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    window.commandDeck = createMockBridge(snapshot);
+
+    render(<App />);
+
+    const article = await screen.findByRole('article', {
+      name: /API Skill Test session bay/i,
+    });
+    expect(within(article).queryByText('Terminal test adapter')).not.toBeInTheDocument();
+
+    fireEvent.click(within(article).getByRole('button', { name: 'Resume' }));
+
+    expect(await within(article).findByText('Terminal test adapter')).toBeInTheDocument();
+  });
+
   it('verifies connected auth and starts refresh from one action when the check fails', async () => {
     const snapshot = createPhaseOneState('test');
     const lastCheckedAt = new Date().toISOString();

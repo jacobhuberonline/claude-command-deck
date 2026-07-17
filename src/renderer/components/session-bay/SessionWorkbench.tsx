@@ -36,6 +36,10 @@ export function SessionWorkbench({
     runtime.processType === undefined || runtime.processType === 'claudeSession';
   const canSendPrompt = runtime.processState === 'running' && isClaudeRuntime;
   const promptDisabled = !canSendPrompt;
+  const consoleForcedOpen = Boolean(
+    runtime.outputRequiresConsole || runtime.processType === 'shellSession',
+  );
+  const consoleVisible = consoleForcedOpen || consoleOpen;
 
   const submitPrompt = async () => {
     const value = prompt.trimEnd();
@@ -74,6 +78,11 @@ export function SessionWorkbench({
     onStartShell(configuration.id);
   };
 
+  const resumeClaude = () => {
+    setConsoleOpen(true);
+    window.setTimeout(() => onLaunchClaude(configuration.id, 'resumeSpecific'), 0);
+  };
+
   return (
     <section className="session-workbench" aria-label={`${configuration.name} session controls`}>
       <div className="workbench-toolbar">
@@ -109,11 +118,7 @@ export function SessionWorkbench({
                 <Play size={15} aria-hidden="true" />
                 <span>New</span>
               </button>
-              <button
-                className="control-button"
-                type="button"
-                onClick={() => onLaunchClaude(configuration.id, 'resumeSpecific')}
-              >
+              <button className="control-button" type="button" onClick={resumeClaude}>
                 <RotateCcw size={15} aria-hidden="true" />
                 <span>Resume</span>
               </button>
@@ -135,10 +140,11 @@ export function SessionWorkbench({
           <button
             className="control-button"
             type="button"
+            disabled={consoleForcedOpen}
             onClick={() => setConsoleOpen((current) => !current)}
           >
             <TerminalSquare size={15} aria-hidden="true" />
-            <span>{consoleOpen ? 'Hide Console' : 'Console'}</span>
+            <span>{consoleVisible && !consoleForcedOpen ? 'Hide Console' : 'Console'}</span>
           </button>
         </div>
       </div>
@@ -167,13 +173,13 @@ export function SessionWorkbench({
       </form>
       {promptError ? <span className="prompt-error">{promptError}</span> : null}
 
-      {runtime.outputPreview ? (
+      {runtime.outputPreview && !runtime.outputRequiresConsole ? (
         <div className="workbench-output" aria-label={`${configuration.name} output`}>
           <pre>{runtime.outputPreview}</pre>
         </div>
       ) : null}
 
-      {consoleOpen ? <TerminalPane session={session} terminalBridge={terminalBridge} /> : null}
+      {consoleVisible ? <TerminalPane session={session} terminalBridge={terminalBridge} /> : null}
     </section>
   );
 }
