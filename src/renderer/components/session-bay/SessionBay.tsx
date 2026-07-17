@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  ExternalLink,
   FolderOpen,
   Maximize2,
   MoreHorizontal,
@@ -88,11 +87,15 @@ export function SessionBay({
     >
       <div className="bay-accent" aria-hidden="true" />
       <header className="bay-header">
-        <button className="bay-title" type="button" onClick={onFocus}>
+        <button
+          className="bay-title"
+          type="button"
+          onClick={onFocus}
+          title={configuration.workingDirectory || 'No directory selected'}
+        >
           <span className="status-dot" aria-hidden="true" />
           <span>
             <strong>{configuration.name}</strong>
-            <small>{configuration.workingDirectory || 'No directory selected'}</small>
           </span>
         </button>
         <div className="bay-header-actions">
@@ -209,12 +212,6 @@ export function SessionBay({
             Exit {runtime.exitCode ?? 'unknown'}
           </span>
         ) : null}
-        {configuration.workingDirectory ? (
-          <span className="directory-chip">
-            <ExternalLink size={13} aria-hidden="true" />
-            {directoryLeaf(configuration.workingDirectory)}
-          </span>
-        ) : null}
       </footer>
     </article>
   );
@@ -242,9 +239,4 @@ function formatShortTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
-}
-
-function directoryLeaf(value: string) {
-  const parts = value.split(/[\\/]/).filter(Boolean);
-  return parts.at(-1) ?? value;
 }

@@ -73,8 +73,8 @@ button:focus-visible {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto auto;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 5px 10px;
   border-bottom: 1px solid rgba(124, 151, 171, 0.16);
   background: rgba(10, 14, 19, 0.96);
 }
@@ -94,15 +94,15 @@ button:focus-visible {
 }
 
 .brand-block {
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border: 1px solid rgba(105, 201, 216, 0.38);
   border-radius: 7px;
   color: var(--cyan);
@@ -117,7 +117,7 @@ p {
 }
 
 h1 {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.1;
   font-weight: 700;
 }
@@ -126,23 +126,22 @@ h1 {
 .auth-summary span,
 .bottom-status span,
 .terminal-toolbar,
-.bay-title small,
 .settings-header span {
   color: var(--muted);
   font-size: 12px;
 }
 
 .count-strip {
-  gap: 6px;
+  gap: 5px;
   justify-content: end;
 }
 
 .metric {
   display: grid;
   grid-template-columns: auto auto;
-  gap: 5px;
+  gap: 4px;
   align-items: baseline;
-  padding: 5px 7px;
+  padding: 3px 6px;
   border: 1px solid rgba(124, 151, 171, 0.16);
   border-radius: 7px;
   background: rgba(18, 25, 34, 0.68);
@@ -165,7 +164,7 @@ h1 {
 
 .command-actions {
   justify-content: end;
-  gap: 7px;
+  gap: 5px;
 }
 
 .control-button,
@@ -183,8 +182,8 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 30px;
-  padding: 0 9px;
+  min-height: 28px;
+  padding: 0 8px;
   font-size: 12px;
   font-weight: 650;
 }
@@ -198,8 +197,8 @@ h1 {
 .terminal-tool {
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
 }
 
 .icon-button.quiet,
@@ -305,7 +304,7 @@ h1 {
 }
 
 .session-bay.compact .bay-actions .control-button span,
-.session-bay.compact .directory-chip {
+.session-bay.compact .bay-warning {
   display: none;
 }
 
@@ -332,20 +331,19 @@ h1 {
 .bay-header {
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px 5px 12px;
+  padding: 6px 8px 4px 10px;
 }
 
 .bay-title {
   min-width: 0;
-  gap: 9px;
+  gap: 8px;
   padding: 0;
   border: 0;
   background: transparent;
   text-align: left;
 }
 
-.bay-title strong,
-.bay-title small {
+.bay-title strong {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -382,8 +380,7 @@ h1 {
 }
 
 .same-project,
-.bay-warning,
-.directory-chip {
+.bay-warning {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -401,8 +398,8 @@ h1 {
 .bay-meta {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  padding: 0 10px 6px 12px;
+  gap: 5px;
+  padding: 0 8px 5px 10px;
 }
 
 .meta-pair {
@@ -547,12 +544,6 @@ h1 {
   border-color: rgba(237, 129, 129, 0.34);
   color: var(--red);
   background: rgba(237, 129, 129, 0.08);
-}
-
-.directory-chip {
-  border-color: rgba(124, 151, 171, 0.16);
-  color: var(--muted);
-  background: rgba(12, 17, 23, 0.78);
 }
 
 .bottom-status {

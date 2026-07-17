@@ -58,7 +58,6 @@ export function CommandBar({
         </div>
         <div>
           <h1>Claude Command Deck</h1>
-          <span>Local session command center</span>
         </div>
       </div>
 
