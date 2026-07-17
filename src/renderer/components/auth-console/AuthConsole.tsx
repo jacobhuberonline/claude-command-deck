@@ -35,7 +35,6 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
 
     const terminal = new Terminal({
       cursorBlink: true,
-      convertEol: true,
       fontSize: 12,
       fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
       theme: {

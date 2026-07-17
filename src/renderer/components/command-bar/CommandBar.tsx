@@ -71,16 +71,6 @@ export function CommandBar({
 
       <div className="command-actions">
         <button
-          className={`icon-button auth-status-icon auth-${auth.status}`}
-          type="button"
-          title={`${auth.label}: ${auth.details}`}
-          aria-label={auth.status === 'connected' ? 'Check Connection' : 'Connect Authentication'}
-          disabled={authBusy}
-          onClick={onAuthAction}
-        >
-          <AuthStatusIcon status={auth.status} spinning={authBusy} />
-        </button>
-        <button
           className="control-button primary"
           type="button"
           title="Reload All sessions"
@@ -122,6 +112,16 @@ export function CommandBar({
           onClick={onOpenSettings}
         >
           <Settings size={17} aria-hidden="true" />
+        </button>
+        <button
+          className={`icon-button auth-status-icon auth-${auth.status}`}
+          type="button"
+          title={`${auth.label}: ${auth.details}`}
+          aria-label={auth.status === 'connected' ? 'Check Connection' : 'Connect Authentication'}
+          disabled={authBusy}
+          onClick={onAuthAction}
+        >
+          <AuthStatusIcon status={auth.status} spinning={authBusy} />
         </button>
       </div>
     </header>

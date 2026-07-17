@@ -47,7 +47,6 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
 
     const terminal = new Terminal({
       cursorBlink: true,
-      convertEol: true,
       fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
       fontSize: 12,
       lineHeight: 1.35,
