@@ -14,6 +14,13 @@ interface TerminalPaneProps {
 }
 
 const isTestRuntime = import.meta.env.MODE === 'test';
+const DEFAULT_TERMINAL_FONT_SIZE = 12;
+const MIN_TERMINAL_FONT_SIZE = 9;
+const MAX_TERMINAL_FONT_SIZE = 22;
+
+function clampTerminalFontSize(value: number) {
+  return Math.min(MAX_TERMINAL_FONT_SIZE, Math.max(MIN_TERMINAL_FONT_SIZE, value));
+}
 
 export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -22,8 +29,32 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const initialStatusMessageRef = useRef(session.runtime.statusMessage);
   const resizeTerminalRef = useRef<() => void>(() => undefined);
+  const fontSizeRef = useRef(DEFAULT_TERMINAL_FONT_SIZE);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const setTerminalFontSize = useCallback((nextFontSize: number) => {
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      return;
+    }
+
+    const fontSize = clampTerminalFontSize(nextFontSize);
+    fontSizeRef.current = fontSize;
+    terminal.options.fontSize = fontSize;
+    window.requestAnimationFrame(() => resizeTerminalRef.current());
+  }, []);
+
+  const zoomTerminal = useCallback(
+    (delta: number) => {
+      setTerminalFontSize(fontSizeRef.current + delta);
+    },
+    [setTerminalFontSize],
+  );
+
+  const resetTerminalZoom = useCallback(() => {
+    setTerminalFontSize(DEFAULT_TERMINAL_FONT_SIZE);
+  }, [setTerminalFontSize]);
+
   const pasteClipboard = useCallback(() => {
     void navigator.clipboard
       ?.readText()
@@ -50,7 +81,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     const terminal = new Terminal({
       cursorBlink: true,
       fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
-      fontSize: 12,
+      fontSize: fontSizeRef.current,
       lineHeight: 1.35,
       scrollback: session.configuration.scrollback,
       theme: {
@@ -89,12 +120,28 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     terminal.writeln('\x1b[36mLOCAL SYSTEM\x1b[0m');
     terminal.writeln(initialStatusMessageRef.current);
     terminal.attachCustomKeyEventHandler((event) => {
-      if (
-        event.type === 'keydown' &&
-        (event.ctrlKey || event.metaKey) &&
-        event.key.toLowerCase() === 'v'
-      ) {
+      if (event.type !== 'keydown' || (!event.ctrlKey && !event.metaKey)) {
+        return true;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === 'v') {
         pasteClipboard();
+        return false;
+      }
+
+      if (key === '+' || key === '=') {
+        zoomTerminal(1);
+        return false;
+      }
+
+      if (key === '-' || key === '_') {
+        zoomTerminal(-1);
+        return false;
+      }
+
+      if (key === '0') {
+        resetTerminalZoom();
         return false;
       }
 
@@ -152,9 +199,19 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       }
     };
     container.addEventListener('paste', onPaste);
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) {
+        return;
+      }
+
+      event.preventDefault();
+      zoomTerminal(event.deltaY < 0 ? 1 : -1);
+    };
+    container.addEventListener('wheel', onWheel, { passive: false });
 
     return () => {
       container.removeEventListener('paste', onPaste);
+      container.removeEventListener('wheel', onWheel);
       resizeObserver?.disconnect();
       offOutput();
       offExit();
@@ -165,7 +222,14 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       searchAddonRef.current = null;
       resizeTerminalRef.current = () => undefined;
     };
-  }, [pasteClipboard, session.configuration.id, session.configuration.scrollback, terminalBridge]);
+  }, [
+    pasteClipboard,
+    resetTerminalZoom,
+    session.configuration.id,
+    session.configuration.scrollback,
+    terminalBridge,
+    zoomTerminal,
+  ]);
 
   useEffect(() => {
     if (
