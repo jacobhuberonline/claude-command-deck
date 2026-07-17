@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { ClipboardPaste } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { AuthBridge } from '../../../shared/ipc/contracts';
@@ -14,6 +15,18 @@ interface AuthConsoleProps {
 export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
+  const pasteClipboard = useCallback(() => {
+    void navigator.clipboard
+      ?.readText()
+      .then((text) => {
+        if (text) {
+          return authBridge.write({ data: text });
+        }
+
+        return undefined;
+      })
+      .catch(() => undefined);
+  }, [authBridge]);
 
   useEffect(() => {
     if (!open || isTestRuntime || !hostRef.current) {
@@ -36,6 +49,18 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
     terminal.open(hostRef.current);
     terminal.writeln('\x1b[36mAUTHENTICATION CONSOLE\x1b[0m');
     terminalRef.current = terminal;
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (
+        event.type === 'keydown' &&
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === 'v'
+      ) {
+        pasteClipboard();
+        return false;
+      }
+
+      return true;
+    });
 
     const dataDisposable = terminal.onData((data) => {
       void authBridge.write({ data });
@@ -67,7 +92,7 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
       terminal.dispose();
       terminalRef.current = null;
     };
-  }, [authBridge, open]);
+  }, [authBridge, open, pasteClipboard]);
 
   if (!open) {
     return null;
@@ -92,6 +117,10 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
             }}
           >
             Start refresh
+          </button>
+          <button className="control-button" type="button" onClick={pasteClipboard}>
+            <ClipboardPaste size={14} aria-hidden="true" />
+            Paste
           </button>
           <button
             className="control-button"

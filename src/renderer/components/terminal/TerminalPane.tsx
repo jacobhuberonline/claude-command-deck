@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Clipboard, Eraser, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Clipboard, ClipboardPaste, Eraser, Search, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
@@ -22,6 +22,18 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
   const initialStatusMessageRef = useRef(session.runtime.statusMessage);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const pasteClipboard = useCallback(() => {
+    void navigator.clipboard
+      ?.readText()
+      .then((text) => {
+        if (text) {
+          return terminalBridge.write({ sessionId: session.configuration.id, data: text });
+        }
+
+        return undefined;
+      })
+      .catch(() => undefined);
+  }, [session.configuration.id, terminalBridge]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -75,6 +87,18 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     searchAddonRef.current = searchAddon;
     terminal.writeln('\x1b[36mLOCAL SYSTEM\x1b[0m');
     terminal.writeln(initialStatusMessageRef.current);
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (
+        event.type === 'keydown' &&
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === 'v'
+      ) {
+        pasteClipboard();
+        return false;
+      }
+
+      return true;
+    });
 
     const dataDisposable = terminal.onData((data) => {
       void terminalBridge.write({ sessionId: session.configuration.id, data });
@@ -137,7 +161,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       fitAddonRef.current = null;
       searchAddonRef.current = null;
     };
-  }, [session.configuration.id, session.configuration.scrollback, terminalBridge]);
+  }, [pasteClipboard, session.configuration.id, session.configuration.scrollback, terminalBridge]);
 
   const copySelection = () => {
     const selection = terminalRef.current?.getSelection();
@@ -193,6 +217,15 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
             onClick={copySelection}
           >
             <Clipboard size={14} aria-hidden="true" />
+          </button>
+          <button
+            className="terminal-tool"
+            type="button"
+            title="Paste clipboard"
+            aria-label="Paste clipboard"
+            onClick={pasteClipboard}
+          >
+            <ClipboardPaste size={14} aria-hidden="true" />
           </button>
           <button
             className="terminal-tool"
