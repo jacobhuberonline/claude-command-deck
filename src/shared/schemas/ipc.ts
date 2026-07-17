@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { SESSION_IDS } from '../domain/types';
 import {
+  authConfigurationSchema,
   audioPreferencesSchema,
   notificationPreferencesSchema,
   sessionAudioPreferencesSchema,
@@ -18,6 +19,10 @@ export const selectDirectoryRequestSchema = z.object({
 
 export const updateAudioPreferencesRequestSchema = z.object({
   preferences: audioPreferencesSchema,
+});
+
+export const updateAuthConfigurationRequestSchema = z.object({
+  auth: authConfigurationSchema,
 });
 
 export const updateNotificationPreferencesRequestSchema = z.object({

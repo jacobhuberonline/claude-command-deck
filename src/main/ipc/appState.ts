@@ -6,6 +6,7 @@ import type { CommandResult, SelectDirectoryResult } from '../../shared/ipc/cont
 import {
   openExternalDirectoryRequestSchema,
   selectDirectoryRequestSchema,
+  updateAuthConfigurationRequestSchema,
   updateAudioPreferencesRequestSchema,
   updateNotificationPreferencesRequestSchema,
   updateSessionAudioPreferencesRequestSchema,
@@ -84,6 +85,16 @@ export function registerAppStateHandlers(
     }
 
     settingsStore.updateAudioPreferences(payload.data.preferences);
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.appUpdateAuthConfiguration, (_event, rawPayload): CommandResult => {
+    const payload = updateAuthConfigurationRequestSchema.safeParse(rawPayload);
+    if (!payload.success) {
+      return { ok: false, error: 'Invalid authentication configuration.' };
+    }
+
+    settingsStore.updateAuthConfiguration(payload.data.auth);
     return { ok: true };
   });
 

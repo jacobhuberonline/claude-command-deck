@@ -3,6 +3,7 @@ export const IPC_CHANNELS = {
   appOpenExternalDirectory: 'app:open-external-directory',
   appOpenLogDirectory: 'app:open-log-directory',
   appSelectDirectory: 'app:select-directory',
+  appUpdateAuthConfiguration: 'app:update-auth-configuration',
   appUpdateAudioPreferences: 'app:update-audio-preferences',
   appUpdateNotificationPreferences: 'app:update-notification-preferences',
   appUpdateSessionAudioPreferences: 'app:update-session-audio-preferences',

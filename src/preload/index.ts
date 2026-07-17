@@ -19,6 +19,7 @@ import {
   terminalResizeRequestSchema,
   terminalStopRequestSchema,
   terminalWriteRequestSchema,
+  updateAuthConfigurationRequestSchema,
   updateAudioPreferencesRequestSchema,
   updateNotificationPreferencesRequestSchema,
   updateSessionAudioPreferencesRequestSchema,
@@ -49,6 +50,12 @@ const bridge: CommandDeckBridge = {
     const payload = updateAudioPreferencesRequestSchema.parse(request);
     return ipcRenderer.invoke(IPC_CHANNELS.appUpdateAudioPreferences, payload) as Promise<
       Awaited<ReturnType<CommandDeckBridge['updateAudioPreferences']>>
+    >;
+  },
+  updateAuthConfiguration: (request) => {
+    const payload = updateAuthConfigurationRequestSchema.parse(request);
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateAuthConfiguration, payload) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['updateAuthConfiguration']>>
     >;
   },
   updateNotificationPreferences: (request) => {

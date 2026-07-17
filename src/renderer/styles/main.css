@@ -725,18 +725,42 @@ h1 {
   align-items: center;
 }
 
+.settings-number-pair {
+  display: grid;
+  grid-template-columns: minmax(86px, 110px) 28px;
+  gap: 8px;
+  align-items: center;
+}
+
 .settings-input-pair input[type='range'] {
   width: 100%;
   accent-color: var(--cyan);
 }
 
-.time-input {
+.time-input,
+.settings-text-input {
   min-height: 32px;
   padding: 0 8px;
   border: 1px solid rgba(124, 151, 171, 0.22);
   border-radius: 7px;
   color: var(--text);
   background: rgba(12, 17, 23, 0.88);
+}
+
+.settings-field .settings-text-input {
+  min-width: min(360px, 45vw);
+}
+
+.settings-text-area {
+  min-height: 88px;
+  padding: 8px;
+  resize: vertical;
+  font: inherit;
+}
+
+.settings-field-stack .settings-text-input {
+  width: 100%;
+  min-width: 0;
 }
 
 .settings-action-grid {

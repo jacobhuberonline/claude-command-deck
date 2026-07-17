@@ -1,6 +1,7 @@
 import type {
   AppStateSnapshot,
   AuthCheckResult,
+  AuthConfiguration,
   AudioPreferences,
   ClaudeDiscoverySnapshot,
   ManagedProcessSnapshot,
@@ -19,6 +20,10 @@ export interface SelectDirectoryRequest {
 
 export interface UpdateAudioPreferencesRequest {
   preferences: AudioPreferences;
+}
+
+export interface UpdateAuthConfigurationRequest {
+  auth: AuthConfiguration;
 }
 
 export interface UpdateNotificationPreferencesRequest {
@@ -143,6 +148,7 @@ export interface CommandDeckBridge {
   openDirectory: (request: OpenDirectoryRequest) => Promise<CommandResult>;
   openLogDirectory: () => Promise<CommandResult>;
   selectDirectory: (request: SelectDirectoryRequest) => Promise<SelectDirectoryResult>;
+  updateAuthConfiguration: (request: UpdateAuthConfigurationRequest) => Promise<CommandResult>;
   updateAudioPreferences: (request: UpdateAudioPreferencesRequest) => Promise<CommandResult>;
   updateNotificationPreferences: (
     request: UpdateNotificationPreferencesRequest,

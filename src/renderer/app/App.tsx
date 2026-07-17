@@ -3,6 +3,7 @@ import { buildClaudeCommand } from '../../shared/claude/ClaudeCommandBuilder';
 import { createPhaseOneState } from '../../shared/domain/defaults';
 import type {
   AppStateSnapshot,
+  AuthConfiguration,
   AuthStatus,
   AudioEvent,
   AudioPreferences,
@@ -38,6 +39,7 @@ const fallbackBridge = {
       error: 'Desktop directory picker is not available.',
       cancelled: true,
     }),
+  updateAuthConfiguration: () => Promise.resolve({ ok: true as const }),
   updateAudioPreferences: () => Promise.resolve({ ok: true as const }),
   updateNotificationPreferences: () => Promise.resolve({ ok: true as const }),
   updateSessionAudioPreferences: () => Promise.resolve({ ok: true as const }),
@@ -429,6 +431,31 @@ export function App() {
     const result = await bridge.updateAudioPreferences({ preferences });
     if (!result.ok) {
       addPreferenceDiagnostic('audio-preferences', 'Audio preferences', result.error);
+    }
+  }
+
+  async function updateAuthConfiguration(auth: AuthConfiguration) {
+    setAppState((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        auth,
+      },
+      auth: {
+        ...current.auth,
+        provider: auth.provider,
+        status: auth.provider === 'disabled' ? 'notConfigured' : current.auth.status,
+        label: auth.provider === 'disabled' ? 'Authentication disabled' : current.auth.label,
+        details:
+          auth.provider === 'disabled'
+            ? 'Authentication monitoring is disabled.'
+            : current.auth.details,
+      },
+    }));
+
+    const result = await bridge.updateAuthConfiguration({ auth });
+    if (!result.ok) {
+      addPreferenceDiagnostic('auth-configuration', 'Authentication configuration', result.error);
     }
   }
 
@@ -924,6 +951,9 @@ export function App() {
         section={settingsSection}
         onSelectSection={setSettingsSection}
         onClose={() => setSettingsSection(null)}
+        onUpdateAuthConfiguration={(auth) => {
+          void updateAuthConfiguration(auth);
+        }}
         onUpdateAudioPreferences={(preferences) => {
           void updateAudioPreferences(preferences);
         }}

@@ -1,6 +1,8 @@
 import { X } from 'lucide-react';
 import type {
   AppStateSnapshot,
+  AuthConfiguration,
+  AuthProvider,
   AudioEvent,
   AudioPreferences,
   NotificationPreferences,
@@ -15,6 +17,7 @@ interface SettingsPanelProps {
   section: SettingsSection | null;
   onSelectSection: (section: SettingsSection) => void;
   onClose: () => void;
+  onUpdateAuthConfiguration: (auth: AuthConfiguration) => void;
   onUpdateAudioPreferences: (preferences: AudioPreferences) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
   onUpdateSessionAudioPreferences: (
@@ -42,6 +45,7 @@ export function SettingsPanel({
   section,
   onSelectSection,
   onClose,
+  onUpdateAuthConfiguration,
   onUpdateAudioPreferences,
   onUpdateNotificationPreferences,
   onUpdateSessionAudioPreferences,
@@ -92,6 +96,7 @@ export function SettingsPanel({
             <SettingsSectionContent
               appState={appState}
               section={section}
+              onUpdateAuthConfiguration={onUpdateAuthConfiguration}
               onUpdateAudioPreferences={onUpdateAudioPreferences}
               onUpdateNotificationPreferences={onUpdateNotificationPreferences}
               onUpdateSessionAudioPreferences={onUpdateSessionAudioPreferences}
@@ -110,6 +115,7 @@ function SettingsSectionContent({
   appState,
   section,
   onUpdateAudioPreferences,
+  onUpdateAuthConfiguration,
   onUpdateNotificationPreferences,
   onUpdateSessionAudioPreferences,
   onTestAudio,
@@ -119,6 +125,7 @@ function SettingsSectionContent({
   appState: AppStateSnapshot;
   section: SettingsSection;
   onUpdateAudioPreferences: (preferences: AudioPreferences) => void;
+  onUpdateAuthConfiguration: (auth: AuthConfiguration) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
   onUpdateSessionAudioPreferences: (
     sessionId: SessionId,
@@ -130,23 +137,7 @@ function SettingsSectionContent({
 }) {
   if (section === 'authentication') {
     return (
-      <>
-        <h3>Authentication</h3>
-        <Field label="Provider" value={appState.settings.auth.provider.toUpperCase()} />
-        <Field
-          label="Check command"
-          value={`${appState.settings.auth.checkExecutable} ${appState.settings.auth.checkArgs.join(' ')}`}
-        />
-        <Field
-          label="Refresh command"
-          value={
-            appState.settings.auth.refreshExecutable
-              ? `${appState.settings.auth.refreshExecutable} ${appState.settings.auth.refreshArgs.join(' ')}`
-              : 'Not configured'
-          }
-        />
-        <Field label="Check interval" value={`${appState.settings.auth.checkIntervalSeconds}s`} />
-      </>
+      <AuthenticationSettings auth={appState.settings.auth} onUpdate={onUpdateAuthConfiguration} />
     );
   }
 
@@ -221,6 +212,90 @@ const soundTests: Array<{ event: AudioEvent; label: string }> = [
   { event: 'reload_all.completed', label: 'Reload All complete' },
   { event: 'reload_all.partially_failed', label: 'Reload All warning' },
 ];
+
+function AuthenticationSettings({
+  auth,
+  onUpdate,
+}: {
+  auth: AuthConfiguration;
+  onUpdate: (auth: AuthConfiguration) => void;
+}) {
+  const update = (patch: Partial<AuthConfiguration>) => onUpdate({ ...auth, ...patch });
+
+  return (
+    <>
+      <h3>Authentication</h3>
+      <label className="settings-field">
+        <span>Provider</span>
+        <select
+          className="settings-text-input"
+          value={auth.provider}
+          onChange={(event) => update({ provider: event.currentTarget.value as AuthProvider })}
+        >
+          <option value="aws">AWS</option>
+          <option value="custom">Custom</option>
+          <option value="disabled">Disabled</option>
+        </select>
+      </label>
+      <TextField
+        label="Check executable"
+        value={auth.checkExecutable}
+        placeholder="aws"
+        onChange={(value) => update({ checkExecutable: value })}
+      />
+      <ArgsField
+        label="Check arguments"
+        value={auth.checkArgs}
+        placeholder={'sts\nget-caller-identity\n--output\njson'}
+        onChange={(value) => update({ checkArgs: value })}
+      />
+      <TextField
+        label="Refresh executable"
+        value={auth.refreshExecutable}
+        placeholder="aws"
+        onChange={(value) => update({ refreshExecutable: value })}
+      />
+      <ArgsField
+        label="Refresh arguments"
+        value={auth.refreshArgs}
+        placeholder={'sso\nlogin'}
+        onChange={(value) => update({ refreshArgs: value })}
+      />
+      <TextField
+        label="Working directory"
+        value={auth.workingDirectory}
+        placeholder="Leave blank to use the app directory"
+        onChange={(value) => update({ workingDirectory: value })}
+      />
+      <ToggleField
+        label="Shell mode"
+        enabled={auth.shellMode}
+        onToggle={() => update({ shellMode: !auth.shellMode })}
+      />
+      <NumberField
+        label="Check interval"
+        value={auth.checkIntervalSeconds}
+        min={30}
+        max={86400}
+        suffix="s"
+        onChange={(value) => update({ checkIntervalSeconds: value })}
+      />
+      <NumberField
+        label="Check timeout"
+        value={auth.checkTimeoutSeconds}
+        min={1}
+        max={600}
+        suffix="s"
+        onChange={(value) => update({ checkTimeoutSeconds: value })}
+      />
+      <ToggleField
+        label="Startup checks"
+        enabled={auth.startupChecksEnabled}
+        onToggle={() => update({ startupChecksEnabled: !auth.startupChecksEnabled })}
+      />
+    </>
+  );
+}
 
 function AudioSettings({
   appState,
@@ -489,6 +564,100 @@ function ToggleField({
         {enabled ? 'Enabled' : 'Disabled'}
       </button>
     </div>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="settings-field">
+      <span>{label}</span>
+      <input
+        className="settings-text-input"
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+    </label>
+  );
+}
+
+function ArgsField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string[];
+  placeholder?: string;
+  onChange: (value: string[]) => void;
+}) {
+  return (
+    <label className="settings-field settings-field-stack">
+      <span>{label}</span>
+      <textarea
+        className="settings-text-input settings-text-area"
+        value={value.join('\n')}
+        placeholder={placeholder}
+        onChange={(event) => {
+          onChange(
+            event.currentTarget.value
+              .split('\n')
+              .map((item) => item.trim())
+              .filter(Boolean),
+          );
+        }}
+      />
+    </label>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="settings-field">
+      <span>{label}</span>
+      <span className="settings-number-pair">
+        <input
+          className="settings-text-input"
+          type="number"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(event) => {
+            const next = Number(event.currentTarget.value);
+            if (Number.isFinite(next)) {
+              onChange(Math.min(max, Math.max(min, next)));
+            }
+          }}
+        />
+        <strong>{suffix}</strong>
+      </span>
+    </label>
   );
 }
 

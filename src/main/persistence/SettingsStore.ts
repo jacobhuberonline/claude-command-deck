@@ -2,6 +2,7 @@ import Store from 'electron-store';
 import { createDefaultSettings } from '../../shared/domain/defaults';
 import type {
   ApplicationSettings,
+  AuthConfiguration,
   AudioPreferences,
   NotificationPreferences,
   SessionAudioPreferences,
@@ -90,6 +91,16 @@ export class SettingsStore {
     const next: ApplicationSettings = {
       ...current,
       audio: preferences,
+    };
+    this.save(next);
+    return next;
+  }
+
+  updateAuthConfiguration(auth: AuthConfiguration): ApplicationSettings {
+    const current = this.load();
+    const next: ApplicationSettings = {
+      ...current,
+      auth,
     };
     this.save(next);
     return next;
