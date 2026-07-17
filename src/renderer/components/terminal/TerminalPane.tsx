@@ -30,6 +30,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
   const initialStatusMessageRef = useRef(session.runtime.statusMessage);
   const resizeTerminalRef = useRef<() => void>(() => undefined);
   const fontSizeRef = useRef(DEFAULT_TERMINAL_FONT_SIZE);
+  const lastWriteErrorRef = useRef<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const setTerminalFontSize = useCallback((nextFontSize: number) => {
@@ -149,7 +150,21 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     });
 
     const dataDisposable = terminal.onData((data) => {
-      void terminalBridge.write({ sessionId: session.configuration.id, data });
+      void terminalBridge
+        .write({ sessionId: session.configuration.id, data })
+        .then((result) => {
+          if (!result.ok) {
+            if (lastWriteErrorRef.current !== result.error) {
+              lastWriteErrorRef.current = result.error;
+              terminal.writeln('');
+              terminal.writeln(`\x1b[31mLOCAL SYSTEM\x1b[0m ${result.error}`);
+            }
+            return;
+          }
+
+          lastWriteErrorRef.current = null;
+        })
+        .catch(() => undefined);
     });
 
     const offOutput = terminalBridge.onOutput((event) => {
@@ -282,7 +297,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       aria-label={`${session.configuration.name} terminal`}
     >
       <div className="terminal-toolbar">
-        <span>PTY display</span>
+        <span>Terminal</span>
         <div className="terminal-toolbar-actions">
           {searchOpen ? (
             <label className="terminal-search">

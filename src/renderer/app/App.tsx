@@ -27,7 +27,6 @@ import {
 } from '../services/activity/ActivityClassifier';
 import { AudioService, defaultSoundRegistry } from '../services/audio/AudioService';
 import { DesktopNotificationService } from '../services/audio/DesktopNotificationService';
-import { appendTerminalOutputPreview } from '../services/terminal/TerminalOutputPreview';
 import { getTerminalSize } from '../services/terminal/TerminalSizeRegistry';
 import {
   parseClaudeUsageOutput,
@@ -116,7 +115,6 @@ const soundAssetNames = [
 const usageTrackerEnabled = false;
 const usageStorageKey = 'claude-command-deck:last-usage';
 const minimumAuthCheckIntervalSeconds = 30;
-const outputPreviewMaxLength = 12000;
 
 function getBridge() {
   return window.commandDeck ?? fallbackBridge;
@@ -344,20 +342,9 @@ export function App() {
       }
 
       const activity = activityClassifierRef.current.recordOutput(sessionId, data);
-      const currentSession = appStateRef.current.sessions.find(
-        (session) => session.configuration.id === sessionId,
-      );
-      const output = appendTerminalOutputPreview(
-        currentSession?.runtime.outputPreview ?? '',
-        data,
-        outputPreviewMaxLength,
-      );
       updateRuntime(sessionId, {
         processState: 'running',
         ...activityPatch(activity),
-        outputPreview: output.preview,
-        outputRequiresConsole:
-          currentSession?.runtime.outputRequiresConsole === true || output.requiresConsole,
       });
       emitSemanticEvents(activity.events, { sessionId });
     });
@@ -367,7 +354,6 @@ export function App() {
       updateRuntime(sessionId, {
         processState: crashed ? 'crashed' : 'stopped',
         processType: undefined,
-        outputRequiresConsole: false,
         activityState: 'idle',
         activityConfidence: 'high',
         exitCode,
@@ -386,10 +372,6 @@ export function App() {
             startedAt: snapshot.startedAt,
             statusMessage: `Recovered active ${snapshot.type} after renderer load.`,
           };
-
-          if (snapshot.type === 'shellSession') {
-            patch.outputRequiresConsole = true;
-          }
 
           if (snapshot.lastOutputAt) {
             patch.lastOutputAt = snapshot.lastOutputAt;
@@ -697,10 +679,8 @@ export function App() {
     updateRuntime(sessionId, {
       processState: 'starting',
       processType: 'shellSession',
-      statusMessage: 'Starting shell PTY.',
+      statusMessage: 'Starting shell.',
       activityState: 'unknown',
-      outputPreview: undefined,
-      outputRequiresConsole: true,
       attention: false,
     });
 
@@ -716,7 +696,6 @@ export function App() {
       updateRuntime(sessionId, {
         processState: 'error',
         processType: undefined,
-        outputRequiresConsole: false,
         statusMessage: result.error,
         activityState: 'unknown',
         attention: true,
@@ -763,10 +742,8 @@ export function App() {
           ? 'Starting Claude Code with continue-most-recent strategy.'
           : command.strategy === 'resumeSpecific'
             ? 'Starting Claude Code resume picker.'
-            : 'Starting Claude Code PTY.',
+            : 'Starting Claude Code.',
       activityState: 'unknown',
-      outputPreview: undefined,
-      outputRequiresConsole: command.strategy === 'resumeSpecific',
       attention: false,
     });
 
@@ -784,7 +761,6 @@ export function App() {
       updateRuntime(sessionId, {
         processState: 'error',
         processType: undefined,
-        outputRequiresConsole: false,
         statusMessage: result.error,
         activityState: 'unknown',
         attention: true,
@@ -938,7 +914,6 @@ export function App() {
     updateRuntime(sessionId, {
       processState: 'restarting',
       processType: 'claudeSession',
-      outputRequiresConsole: false,
       statusMessage: 'Restarting Claude Code so startup-loaded configuration can be reread.',
     });
   }
@@ -974,8 +949,6 @@ export function App() {
                   processType: undefined,
                   activityState: 'idle',
                   statusMessage: 'Configured and stopped.',
-                  outputPreview: undefined,
-                  outputRequiresConsole: false,
                   attention: false,
                 },
               }
@@ -999,7 +972,7 @@ export function App() {
   async function stopSession(sessionId: SessionId) {
     updateRuntime(sessionId, {
       processState: 'stopping',
-      statusMessage: 'Stopping PTY process.',
+      statusMessage: 'Stopping process.',
     });
 
     const result = await bridge.terminal.stop({ sessionId });
@@ -1007,7 +980,6 @@ export function App() {
       updateRuntime(sessionId, {
         processState: 'error',
         processType: undefined,
-        outputRequiresConsole: false,
         statusMessage: result.error,
         attention: true,
       });

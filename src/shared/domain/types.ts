@@ -81,8 +81,6 @@ export interface SessionRuntimeState {
   lastOutputAt?: string;
   exitCode?: number | null;
   statusMessage: string;
-  outputPreview?: string | undefined;
-  outputRequiresConsole?: boolean | undefined;
   sameProject: boolean;
   attention: boolean;
 }

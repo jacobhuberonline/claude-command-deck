@@ -77,72 +77,61 @@ describe('phase 1 visual shell', () => {
     await waitFor(() => expect(selectDirectory).toHaveBeenCalledWith({ sessionId: 'session-2' }));
   });
 
-  it('sends prompts from the GUI workbench without opening the raw terminal', async () => {
+  it('renders the terminal as the primary session workbench', async () => {
     const snapshot = createPhaseOneState('test');
     snapshot.settings.auth.startupChecksEnabled = false;
-    const target = snapshot.sessions.find((session) => session.configuration.id === 'session-3');
-    if (!target) {
-      throw new Error('Expected session-3 fixture.');
-    }
-    target.runtime.processType = 'claudeSession';
-    target.runtime.outputPreview = 'Existing Claude output';
 
-    const write = vi.fn(() => Promise.resolve({ ok: true as const }));
-    window.commandDeck = createMockBridge(snapshot, {}, { write });
+    window.commandDeck = createMockBridge(snapshot);
 
     render(<App />);
 
     const article = await screen.findByRole('article', {
       name: /API Skill Test session bay/i,
     });
-    expect(within(article).queryByText('Terminal test adapter')).not.toBeInTheDocument();
-    expect(within(article).getByText('Existing Claude output')).toBeInTheDocument();
+    expect(
+      within(article).getByRole('region', { name: 'API Skill Test terminal' }),
+    ).toBeInTheDocument();
+    expect(within(article).getByText('Terminal test adapter')).toBeInTheDocument();
+  });
 
-    const prompt = within(article).getByRole('textbox', { name: 'Prompt API Skill Test' });
-    fireEvent.change(prompt, { target: { value: 'Summarize the current diff' } });
-    fireEvent.click(within(article).getByRole('button', { name: 'Send prompt to API Skill Test' }));
+  it('does not show the retired GUI prompt or output-preview layer', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    window.commandDeck = createMockBridge(snapshot);
+
+    render(<App />);
+
+    const article = await screen.findByRole('article', {
+      name: /API Skill Test session bay/i,
+    });
+    expect(within(article).queryByRole('textbox', { name: /Prompt API Skill Test/i })).toBeNull();
+    expect(within(article).queryByRole('button', { name: /Send prompt/i })).toBeNull();
+    expect(within(article).queryByRole('button', { name: 'Console' })).toBeNull();
+  });
+
+  it('starts the shell from the terminal command controls', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    const startShell = vi.fn(() => Promise.resolve({ ok: true as const }));
+    window.commandDeck = createMockBridge(snapshot, {}, { startShell });
+
+    render(<App />);
+
+    const article = await screen.findByRole('article', {
+      name: /Provider API session bay/i,
+    });
+    expect(within(article).getByText('Terminal test adapter')).toBeInTheDocument();
+
+    fireEvent.click(within(article).getByRole('button', { name: 'Shell' }));
 
     await waitFor(() =>
-      expect(write).toHaveBeenCalledWith({
-        sessionId: 'session-3',
-        data: 'Summarize the current diff\r',
+      expect(startShell).toHaveBeenCalledWith({
+        sessionId: 'session-2',
+        workingDirectory: 'C:\\Code\\api-skill-test',
+        cols: 80,
+        rows: 16,
       }),
     );
-    expect(prompt).toHaveValue('');
-  });
-
-  it('keeps the raw terminal hidden until the console drawer is opened', async () => {
-    const snapshot = createPhaseOneState('test');
-    snapshot.settings.auth.startupChecksEnabled = false;
-    window.commandDeck = createMockBridge(snapshot);
-
-    render(<App />);
-
-    const article = await screen.findByRole('article', {
-      name: /API Skill Test session bay/i,
-    });
-    expect(within(article).queryByText('Terminal test adapter')).not.toBeInTheDocument();
-
-    fireEvent.click(within(article).getByRole('button', { name: 'Console' }));
-
-    expect(await within(article).findByText('Terminal test adapter')).toBeInTheDocument();
-  });
-
-  it('opens the console when starting the resume picker', async () => {
-    const snapshot = createPhaseOneState('test');
-    snapshot.settings.auth.startupChecksEnabled = false;
-    window.commandDeck = createMockBridge(snapshot);
-
-    render(<App />);
-
-    const article = await screen.findByRole('article', {
-      name: /API Skill Test session bay/i,
-    });
-    expect(within(article).queryByText('Terminal test adapter')).not.toBeInTheDocument();
-
-    fireEvent.click(within(article).getByRole('button', { name: 'Resume' }));
-
-    expect(await within(article).findByText('Terminal test adapter')).toBeInTheDocument();
   });
 
   it('verifies connected auth and starts refresh from one action when the check fails', async () => {

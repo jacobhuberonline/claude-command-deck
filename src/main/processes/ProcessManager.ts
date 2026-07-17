@@ -69,7 +69,7 @@ export class ProcessManager {
   write(sessionId: SessionId, data: string): CommandResult {
     const process = this.processes.get(sessionId);
     if (!process?.write(data)) {
-      return { ok: false, error: 'No running PTY is attached to this session bay.' };
+      return { ok: false, error: 'No running process is attached to this session bay.' };
     }
 
     return { ok: true };
@@ -78,7 +78,7 @@ export class ProcessManager {
   resize(sessionId: SessionId, cols: number, rows: number): CommandResult {
     const process = this.processes.get(sessionId);
     if (!process?.resize(cols, rows)) {
-      return { ok: false, error: 'No running PTY is attached to this session bay.' };
+      return { ok: false, error: 'No running process is attached to this session bay.' };
     }
 
     return { ok: true };
@@ -87,7 +87,7 @@ export class ProcessManager {
   stop(sessionId: SessionId): CommandResult {
     const process = this.processes.get(sessionId);
     if (!process) {
-      return { ok: false, error: 'No PTY is attached to this session bay.' };
+      return { ok: false, error: 'No process is attached to this session bay.' };
     }
 
     process.stop();

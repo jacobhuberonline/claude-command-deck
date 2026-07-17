@@ -1,11 +1,5 @@
-import { useState, type FormEvent, type KeyboardEvent } from 'react';
-import { FolderPen, Play, RotateCcw, Send, Square, TerminalSquare } from 'lucide-react';
-import type {
-  ProcessState,
-  SessionId,
-  SessionLaunchMode,
-  SessionSnapshot,
-} from '../../../shared/domain/types';
+import { FolderPen, Play, RotateCcw, Square, TerminalSquare } from 'lucide-react';
+import type { SessionId, SessionLaunchMode, SessionSnapshot } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
 import { TerminalPane } from '../terminal/TerminalPane';
 
@@ -27,59 +21,14 @@ export function SessionWorkbench({
   terminalBridge,
 }: SessionWorkbenchProps) {
   const { configuration, runtime } = session;
-  const [prompt, setPrompt] = useState('');
-  const [consoleOpen, setConsoleOpen] = useState(false);
-  const [promptError, setPromptError] = useState<string | null>(null);
   const hasDirectory = configuration.workingDirectory.trim().length > 0;
   const canStop = ['starting', 'running', 'restarting', 'stopping'].includes(runtime.processState);
-  const isClaudeRuntime =
-    runtime.processType === undefined || runtime.processType === 'claudeSession';
-  const canSendPrompt = runtime.processState === 'running' && isClaudeRuntime;
-  const promptDisabled = !canSendPrompt;
-  const consoleForcedOpen = Boolean(
-    runtime.outputRequiresConsole || runtime.processType === 'shellSession',
-  );
-  const consoleVisible = consoleForcedOpen || consoleOpen;
-
-  const submitPrompt = async () => {
-    const value = prompt.trimEnd();
-    if (!value.trim() || promptDisabled) {
-      return;
-    }
-
-    const result = await terminalBridge.write({
-      sessionId: configuration.id,
-      data: `${value}\r`,
-    });
-
-    if (!result.ok) {
-      setPromptError(result.error);
-      return;
-    }
-
-    setPrompt('');
-    setPromptError(null);
-  };
-
-  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    void submitPrompt();
-  };
-
-  const onPromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void submitPrompt();
-    }
-  };
 
   const startShell = () => {
-    setConsoleOpen(true);
     onStartShell(configuration.id);
   };
 
   const resumeClaude = () => {
-    setConsoleOpen(true);
     window.setTimeout(() => onLaunchClaude(configuration.id, 'resumeSpecific'), 0);
   };
 
@@ -137,69 +86,10 @@ export function SessionWorkbench({
             <Square size={14} aria-hidden="true" />
             <span>Stop</span>
           </button>
-          <button
-            className="control-button"
-            type="button"
-            disabled={consoleForcedOpen}
-            onClick={() => setConsoleOpen((current) => !current)}
-          >
-            <TerminalSquare size={15} aria-hidden="true" />
-            <span>{consoleVisible && !consoleForcedOpen ? 'Hide Console' : 'Console'}</span>
-          </button>
         </div>
       </div>
 
-      <form className="prompt-composer" onSubmit={onSubmit}>
-        <textarea
-          aria-label={`Prompt ${configuration.name}`}
-          value={prompt}
-          disabled={promptDisabled}
-          placeholder={promptPlaceholder(hasDirectory, runtime.processState, runtime.processType)}
-          onChange={(event) => {
-            setPrompt(event.currentTarget.value);
-            setPromptError(null);
-          }}
-          onKeyDown={onPromptKeyDown}
-        />
-        <button
-          className="control-button primary"
-          type="submit"
-          disabled={promptDisabled || !prompt.trim()}
-          aria-label={`Send prompt to ${configuration.name}`}
-        >
-          <Send size={15} aria-hidden="true" />
-          <span>Send</span>
-        </button>
-      </form>
-      {promptError ? <span className="prompt-error">{promptError}</span> : null}
-
-      {runtime.outputPreview && !runtime.outputRequiresConsole ? (
-        <div className="workbench-output" aria-label={`${configuration.name} output`}>
-          <pre>{runtime.outputPreview}</pre>
-        </div>
-      ) : null}
-
-      {consoleVisible ? <TerminalPane session={session} terminalBridge={terminalBridge} /> : null}
+      <TerminalPane session={session} terminalBridge={terminalBridge} />
     </section>
   );
-}
-
-function promptPlaceholder(
-  hasDirectory: boolean,
-  processState: ProcessState,
-  processType: SessionSnapshot['runtime']['processType'],
-) {
-  if (!hasDirectory) {
-    return 'Select a directory first';
-  }
-
-  if (processType === 'shellSession') {
-    return 'Shell input uses Console';
-  }
-
-  if (processState !== 'running') {
-    return 'Start Claude to send prompts';
-  }
-
-  return 'Type a prompt for Claude';
 }
