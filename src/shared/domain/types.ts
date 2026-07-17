@@ -74,12 +74,14 @@ export interface SessionConfiguration {
 
 export interface SessionRuntimeState {
   processState: ProcessState;
+  processType?: ManagedProcessType | undefined;
   activityState: ActivityState;
   activityConfidence: ActivityConfidence;
   startedAt?: string;
   lastOutputAt?: string;
   exitCode?: number | null;
   statusMessage: string;
+  outputPreview?: string | undefined;
   sameProject: boolean;
   attention: boolean;
 }

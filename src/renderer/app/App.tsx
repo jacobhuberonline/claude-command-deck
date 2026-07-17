@@ -111,8 +111,12 @@ const soundAssetNames = [
   'reload-all-warning.wav',
 ];
 
+// Keep usage tracking disabled until the UX and data handling are intentionally reviewed.
+const usageTrackerEnabled = false;
 const usageStorageKey = 'claude-command-deck:last-usage';
 const minimumAuthCheckIntervalSeconds = 30;
+const outputPreviewMaxLength = 12000;
+const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'g');
 
 function getBridge() {
   return window.commandDeck ?? fallbackBridge;
@@ -138,7 +142,7 @@ export function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [authConsoleOpen, setAuthConsoleOpen] = useState(false);
   const [usageSnapshot, setUsageSnapshot] = useState<ClaudeUsageSnapshot | null>(() =>
-    typeof window === 'undefined' ? null : loadStoredUsage(),
+    usageTrackerEnabled && typeof window !== 'undefined' ? loadStoredUsage() : null,
   );
   const activityClassifierRef = useRef(new ActivityClassifier());
   const audioServiceRef = useRef(new AudioService(defaultSoundRegistry));
@@ -315,6 +319,7 @@ export function App() {
         processState: ProcessState;
       } = {
         processState: snapshot.state,
+        processType: snapshot.type,
         startedAt: snapshot.startedAt,
         statusMessage:
           snapshot.state === 'running'
@@ -330,16 +335,22 @@ export function App() {
     });
 
     const offOutput = bridge.terminal.onOutput(({ sessionId, data }) => {
-      const usage = parseClaudeUsageOutput(data);
-      if (usage) {
-        setUsageSnapshot(usage);
-        window.localStorage.setItem(usageStorageKey, JSON.stringify(usage));
+      if (usageTrackerEnabled) {
+        const usage = parseClaudeUsageOutput(data);
+        if (usage) {
+          setUsageSnapshot(usage);
+          window.localStorage.setItem(usageStorageKey, JSON.stringify(usage));
+        }
       }
 
       const activity = activityClassifierRef.current.recordOutput(sessionId, data);
+      const previousOutput =
+        appStateRef.current.sessions.find((session) => session.configuration.id === sessionId)
+          ?.runtime.outputPreview ?? '';
       updateRuntime(sessionId, {
         processState: 'running',
         ...activityPatch(activity),
+        outputPreview: appendOutputPreview(previousOutput, data),
       });
       emitSemanticEvents(activity.events, { sessionId });
     });
@@ -348,6 +359,7 @@ export function App() {
       activityClassifierRef.current.clearSession(sessionId);
       updateRuntime(sessionId, {
         processState: crashed ? 'crashed' : 'stopped',
+        processType: undefined,
         activityState: 'idle',
         activityConfidence: 'high',
         exitCode,
@@ -362,6 +374,7 @@ export function App() {
             processState: ProcessState;
           } = {
             processState: snapshot.state,
+            processType: snapshot.type,
             startedAt: snapshot.startedAt,
             statusMessage: `Recovered active ${snapshot.type} after renderer load.`,
           };
@@ -671,8 +684,10 @@ export function App() {
 
     updateRuntime(sessionId, {
       processState: 'starting',
+      processType: 'shellSession',
       statusMessage: 'Starting shell PTY.',
       activityState: 'unknown',
+      outputPreview: undefined,
       attention: false,
     });
 
@@ -687,6 +702,7 @@ export function App() {
     if (!result.ok) {
       updateRuntime(sessionId, {
         processState: 'error',
+        processType: undefined,
         statusMessage: result.error,
         activityState: 'unknown',
         attention: true,
@@ -727,6 +743,7 @@ export function App() {
 
     updateRuntime(sessionId, {
       processState: 'starting',
+      processType: 'claudeSession',
       statusMessage:
         command.strategy === 'continueMostRecent'
           ? 'Starting Claude Code with continue-most-recent strategy.'
@@ -734,6 +751,7 @@ export function App() {
             ? 'Starting Claude Code resume picker.'
             : 'Starting Claude Code PTY.',
       activityState: 'unknown',
+      outputPreview: undefined,
       attention: false,
     });
 
@@ -750,6 +768,7 @@ export function App() {
     if (!result.ok) {
       updateRuntime(sessionId, {
         processState: 'error',
+        processType: undefined,
         statusMessage: result.error,
         activityState: 'unknown',
         attention: true,
@@ -902,6 +921,7 @@ export function App() {
     await bridge.terminal.stop({ sessionId });
     updateRuntime(sessionId, {
       processState: 'restarting',
+      processType: 'claudeSession',
       statusMessage: 'Restarting Claude Code so startup-loaded configuration can be reread.',
     });
   }
@@ -934,8 +954,10 @@ export function App() {
                 runtime: {
                   ...session.runtime,
                   processState: 'stopped',
+                  processType: undefined,
                   activityState: 'idle',
                   statusMessage: 'Configured and stopped.',
+                  outputPreview: undefined,
                   attention: false,
                 },
               }
@@ -966,6 +988,7 @@ export function App() {
     if (!result.ok) {
       updateRuntime(sessionId, {
         processState: 'error',
+        processType: undefined,
         statusMessage: result.error,
         attention: true,
       });
@@ -1164,6 +1187,7 @@ export function App() {
         appVersion={appState.appVersion}
         auth={appState.auth}
         usage={usageSnapshot}
+        usageEnabled={usageTrackerEnabled}
         sessions={appState.sessions}
         audio={appState.settings.audio}
         onOpenSettings={() => setSettingsSection('general')}
@@ -1286,6 +1310,16 @@ function activityPatch(activity: ActivityClassification) {
   }
 
   return patch;
+}
+
+function appendOutputPreview(existing: string, data: string) {
+  const normalized = stripAnsi(data).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const next = `${existing}${normalized}`;
+  return next.length > outputPreviewMaxLength ? next.slice(-outputPreviewMaxLength) : next;
+}
+
+function stripAnsi(value: string) {
+  return value.replace(ansiEscapePattern, '');
 }
 
 function authTransitionEvent(previous: AuthStatus, next: AuthStatus): AudioEvent | null {

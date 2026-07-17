@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import type { SessionId, SessionLaunchMode, SessionSnapshot } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
-import { TerminalPane } from '../terminal/TerminalPane';
+import { SessionWorkbench } from './SessionWorkbench';
 
 interface SessionBayProps {
   session: SessionSnapshot;
@@ -71,7 +71,7 @@ export function SessionBay({
     runtime.attention ||
     runtime.activityState === 'possiblePermissionPrompt' ||
     runtime.activityState === 'authenticationMayBeRequired';
-  const showTerminal = !isCompact;
+  const showWorkbench = !isCompact;
   const directoryChangeDisabled = ['starting', 'running', 'restarting', 'stopping'].includes(
     runtime.processState,
   );
@@ -136,56 +136,69 @@ export function SessionBay({
         />
       </div>
 
-      {showTerminal ? <TerminalPane session={session} terminalBridge={terminalBridge} /> : null}
+      {showWorkbench ? (
+        <SessionWorkbench
+          session={session}
+          onLaunchClaude={onLaunchClaude}
+          onSelectDirectory={onSelectDirectory}
+          onStartShell={onStartShell}
+          onStopSession={onStopSession}
+          terminalBridge={terminalBridge}
+        />
+      ) : null}
 
       <footer className="bay-actions">
-        <button
-          className="control-button primary"
-          type="button"
-          onClick={() => {
-            if (runtime.processState === 'empty' || !configuration.workingDirectory) {
-              void onSelectDirectory(configuration.id);
-            } else {
-              void onLaunchClaude(configuration.id, selectedLaunchMode);
-            }
-          }}
-        >
-          <Play size={15} aria-hidden="true" />
-          <span>{runtime.processState === 'empty' ? 'Select Directory' : 'Launch'}</span>
-        </button>
-        {configuration.workingDirectory ? (
-          <select
-            className="launch-mode-select"
-            aria-label={`${configuration.name} launch mode`}
-            value={selectedLaunchMode}
-            onChange={(event) => setSelectedLaunchMode(event.target.value as SessionLaunchMode)}
-          >
-            <option value="new">New</option>
-            <option value="continueMostRecent">Continue</option>
-            <option value="resumeSpecific">Resume...</option>
-          </select>
+        {isCompact ? (
+          <>
+            <button
+              className="control-button primary"
+              type="button"
+              onClick={() => {
+                if (runtime.processState === 'empty' || !configuration.workingDirectory) {
+                  void onSelectDirectory(configuration.id);
+                } else {
+                  void onLaunchClaude(configuration.id, selectedLaunchMode);
+                }
+              }}
+            >
+              <Play size={15} aria-hidden="true" />
+              <span>{runtime.processState === 'empty' ? 'Select Directory' : 'Launch'}</span>
+            </button>
+            {configuration.workingDirectory ? (
+              <select
+                className="launch-mode-select"
+                aria-label={`${configuration.name} launch mode`}
+                value={selectedLaunchMode}
+                onChange={(event) => setSelectedLaunchMode(event.target.value as SessionLaunchMode)}
+              >
+                <option value="new">New</option>
+                <option value="continueMostRecent">Continue</option>
+                <option value="resumeSpecific">Resume...</option>
+              </select>
+            ) : null}
+            <button
+              className="control-button"
+              type="button"
+              onClick={() => {
+                void onStartShell(configuration.id);
+              }}
+            >
+              <TerminalSquare size={15} aria-hidden="true" />
+              <span>Shell</span>
+            </button>
+            <button
+              className="icon-button quiet"
+              type="button"
+              title="Stop session"
+              aria-label="Stop session"
+              onClick={() => {
+                void onStopSession(configuration.id);
+              }}
+            >
+              <Square size={14} aria-hidden="true" />
+            </button>
+          </>
         ) : null}
-        <button
-          className="control-button"
-          type="button"
-          onClick={() => {
-            void onStartShell(configuration.id);
-          }}
-        >
-          <TerminalSquare size={15} aria-hidden="true" />
-          <span>Shell</span>
-        </button>
-        <button
-          className="icon-button quiet"
-          type="button"
-          title="Stop session"
-          aria-label="Stop session"
-          onClick={() => {
-            void onStopSession(configuration.id);
-          }}
-        >
-          <Square size={14} aria-hidden="true" />
-        </button>
         <button
           className="icon-button quiet"
           type="button"

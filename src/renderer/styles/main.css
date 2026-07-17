@@ -101,12 +101,21 @@ button:focus-visible {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border: 1px solid rgba(105, 201, 216, 0.38);
   border-radius: 7px;
   color: var(--cyan);
-  background: rgba(105, 201, 216, 0.08);
+  background:
+    linear-gradient(145deg, rgba(105, 201, 216, 0.2), rgba(18, 25, 34, 0.34)),
+    rgba(105, 201, 216, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 18px rgba(105, 201, 216, 0.08);
+}
+
+.command-deck-mark {
+  display: block;
 }
 
 h1,
@@ -213,6 +222,13 @@ h1 {
 .icon-button.quiet,
 .terminal-tool {
   background: rgba(12, 17, 23, 0.88);
+}
+
+.control-button:disabled,
+.icon-button:disabled,
+.terminal-tool:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .auth-status-icon.auth-connected {
@@ -440,6 +456,182 @@ h1 {
 
 .meta-pair.attention strong {
   color: var(--amber);
+}
+
+.session-workbench {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(74px, 1fr) auto;
+  gap: 8px;
+  min-height: 0;
+  padding: 0 10px 8px 10px;
+  overflow: auto;
+}
+
+.workbench-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid rgba(124, 151, 171, 0.13);
+  border-radius: 7px;
+  background: rgba(7, 9, 12, 0.24);
+}
+
+.workbench-summary strong,
+.workbench-summary span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbench-summary strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.workbench-summary span:last-child {
+  grid-column: 2;
+  color: var(--subtle);
+  font-size: 11px;
+}
+
+.workbench-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid rgba(124, 151, 171, 0.2);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(18, 25, 34, 0.72);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workbench-state.state-running {
+  border-color: rgba(121, 210, 155, 0.34);
+  color: var(--green);
+  background: rgba(121, 210, 155, 0.1);
+}
+
+.workbench-state.state-crashed,
+.workbench-state.state-error {
+  border-color: rgba(237, 129, 129, 0.38);
+  color: var(--red);
+  background: rgba(237, 129, 129, 0.1);
+}
+
+.workbench-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prompt-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.prompt-composer textarea {
+  min-width: 0;
+  min-height: 66px;
+  max-height: 150px;
+  padding: 9px 10px;
+  border: 1px solid rgba(124, 151, 171, 0.2);
+  border-radius: 7px;
+  color: var(--text);
+  background: rgba(6, 8, 11, 0.78);
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.prompt-composer textarea:disabled {
+  color: var(--subtle);
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.prompt-error {
+  color: var(--red);
+  font-size: 11px;
+}
+
+.workbench-output {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid rgba(124, 151, 171, 0.14);
+  border-radius: 7px;
+  color: #cddae1;
+  background: rgba(6, 8, 11, 0.55);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 151, 171, 0.42) transparent;
+}
+
+.workbench-output pre {
+  margin: 0;
+  padding: 9px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.workbench-output > span {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.console-drawer {
+  display: grid;
+  gap: 6px;
+  min-height: 0;
+}
+
+.console-drawer.open {
+  grid-template-rows: auto minmax(170px, 1fr);
+}
+
+.console-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  border: 1px solid rgba(124, 151, 171, 0.18);
+  border-radius: 7px;
+  color: var(--muted);
+  background: rgba(12, 17, 23, 0.72);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.console-collapsed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  border: 1px dashed rgba(124, 151, 171, 0.18);
+  border-radius: 7px;
+  color: var(--subtle);
+  background: rgba(6, 8, 11, 0.36);
+  font-size: 12px;
+}
+
+.console-drawer .terminal-frame {
+  margin: 0;
 }
 
 .terminal-frame {

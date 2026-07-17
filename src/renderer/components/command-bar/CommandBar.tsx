@@ -21,6 +21,7 @@ interface CommandBarProps {
   appVersion: string;
   auth: AuthStateSnapshot;
   usage: ClaudeUsageSnapshot | null;
+  usageEnabled: boolean;
   sessions: SessionSnapshot[];
   audio: AudioPreferences;
   onOpenSettings: () => void;
@@ -34,6 +35,7 @@ export function CommandBar({
   appVersion,
   auth,
   usage,
+  usageEnabled,
   sessions,
   audio,
   onOpenSettings,
@@ -57,7 +59,7 @@ export function CommandBar({
     <header className="command-bar">
       <div className="brand-block" aria-label={`Claude Command Deck version ${appVersion}`}>
         <div className="brand-mark" aria-hidden="true">
-          <Gauge size={18} />
+          <CommandDeckMark />
         </div>
         <div>
           <h1>Claude Command Deck</h1>
@@ -65,15 +67,17 @@ export function CommandBar({
       </div>
 
       <div className="count-strip" aria-label="Session counts">
-        <Metric
-          label={usage?.label ?? 'Usage'}
-          value={usage ? formatUsd(usage.amountUsd) : '--'}
-          title={
-            usage
-              ? `${usage.source} (${formatObservedAt(usage.observedAt)})`
-              : 'Run /usage in a Claude session to update this.'
-          }
-        />
+        {usageEnabled ? (
+          <Metric
+            label={usage?.label ?? 'Usage'}
+            value={usage ? formatUsd(usage.amountUsd) : '--'}
+            title={
+              usage
+                ? `${usage.source} (${formatObservedAt(usage.observedAt)})`
+                : 'Run /usage in a Claude session to update this.'
+            }
+          />
+        ) : null}
         <Metric label="Running" value={running} />
         <Metric label="Busy" value={busy} />
         <Metric label="Awaiting" value={awaiting} />
@@ -136,6 +140,46 @@ export function CommandBar({
         </button>
       </div>
     </header>
+  );
+}
+
+function CommandDeckMark() {
+  return (
+    <svg
+      className="command-deck-mark"
+      viewBox="0 0 24 24"
+      width="19"
+      height="19"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect
+        x="3.2"
+        y="3.2"
+        width="17.6"
+        height="17.6"
+        rx="4.2"
+        fill="var(--surface-2)"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M7 8h3.7M13.3 8H17M7 12h3.7M13.3 12H17"
+        stroke="var(--line-strong)"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7.3 16.2l2.05-1.9-2.05-1.9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M11.45 16.25h4.1" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <circle cx="17.25" cy="16.2" r="1.45" fill="var(--green)" />
+    </svg>
   );
 }
 

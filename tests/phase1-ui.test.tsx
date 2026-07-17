@@ -51,6 +51,57 @@ describe('phase 1 visual shell', () => {
     terminal.remove();
   });
 
+  it('sends prompts from the GUI workbench without opening the raw terminal', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    const target = snapshot.sessions.find((session) => session.configuration.id === 'session-3');
+    if (!target) {
+      throw new Error('Expected session-3 fixture.');
+    }
+    target.runtime.processType = 'claudeSession';
+    target.runtime.outputPreview = 'Existing Claude output';
+
+    const write = vi.fn(() => Promise.resolve({ ok: true as const }));
+    window.commandDeck = createMockBridge(snapshot, {}, { write });
+
+    render(<App />);
+
+    const article = await screen.findByRole('article', {
+      name: /API Skill Test session bay/i,
+    });
+    expect(within(article).queryByText('Terminal test adapter')).not.toBeInTheDocument();
+    expect(within(article).getByText('Existing Claude output')).toBeInTheDocument();
+
+    const prompt = within(article).getByRole('textbox', { name: 'Prompt API Skill Test' });
+    fireEvent.change(prompt, { target: { value: 'Summarize the current diff' } });
+    fireEvent.click(within(article).getByRole('button', { name: 'Send prompt to API Skill Test' }));
+
+    await waitFor(() =>
+      expect(write).toHaveBeenCalledWith({
+        sessionId: 'session-3',
+        data: 'Summarize the current diff\r',
+      }),
+    );
+    expect(prompt).toHaveValue('');
+  });
+
+  it('keeps the raw terminal hidden until the console drawer is opened', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    window.commandDeck = createMockBridge(snapshot);
+
+    render(<App />);
+
+    const article = await screen.findByRole('article', {
+      name: /API Skill Test session bay/i,
+    });
+    expect(within(article).queryByText('Terminal test adapter')).not.toBeInTheDocument();
+
+    fireEvent.click(within(article).getByRole('button', { name: 'Open Console' }));
+
+    expect(await within(article).findByText('Terminal test adapter')).toBeInTheDocument();
+  });
+
   it('verifies connected auth and starts refresh from one action when the check fails', async () => {
     const snapshot = createPhaseOneState('test');
     const lastCheckedAt = new Date().toISOString();
@@ -103,6 +154,7 @@ describe('phase 1 visual shell', () => {
 function createMockBridge(
   snapshot: AppStateSnapshot,
   authOverrides: Partial<CommandDeckBridge['auth']> = {},
+  terminalOverrides: Partial<CommandDeckBridge['terminal']> = {},
 ): CommandDeckBridge {
   const off = () => undefined;
 
@@ -165,6 +217,7 @@ function createMockBridge(
       onOutput: vi.fn(() => off),
       onExit: vi.fn(() => off),
       onState: vi.fn(() => off),
+      ...terminalOverrides,
     },
   };
 }
