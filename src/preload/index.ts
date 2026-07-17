@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import electron from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc/channels';
 import type {
   AuthExitEvent,
@@ -8,31 +8,13 @@ import type {
   TerminalOutputEvent,
   TerminalStateEvent,
 } from '../shared/ipc/contracts';
-import {
-  authResizeRequestSchema,
-  authWriteRequestSchema,
-  openExternalDirectoryRequestSchema,
-  selectDirectoryRequestSchema,
-  discoverClaudeRequestSchema,
-  startClaudeRequestSchema,
-  startShellRequestSchema,
-  terminalResizeRequestSchema,
-  terminalStopRequestSchema,
-  terminalWriteRequestSchema,
-  updateAuthConfigurationRequestSchema,
-  updateAudioPreferencesRequestSchema,
-  updateNotificationPreferencesRequestSchema,
-  updateSessionAudioPreferencesRequestSchema,
-} from '../shared/schemas/ipc';
-
 const bridge: CommandDeckBridge = {
   getAppState: () =>
     ipcRenderer.invoke(IPC_CHANNELS.appGetState) as Promise<
       Awaited<ReturnType<CommandDeckBridge['getAppState']>>
     >,
   openDirectory: (request) => {
-    const payload = openExternalDirectoryRequestSchema.parse(request);
-    return ipcRenderer.invoke(IPC_CHANNELS.appOpenExternalDirectory, payload) as Promise<
+    return ipcRenderer.invoke(IPC_CHANNELS.appOpenExternalDirectory, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['openDirectory']>>
     >;
   },
@@ -41,39 +23,33 @@ const bridge: CommandDeckBridge = {
       Awaited<ReturnType<CommandDeckBridge['openLogDirectory']>>
     >,
   selectDirectory: (request) => {
-    const payload = selectDirectoryRequestSchema.parse(request);
-    return ipcRenderer.invoke(IPC_CHANNELS.appSelectDirectory, payload) as Promise<
+    return ipcRenderer.invoke(IPC_CHANNELS.appSelectDirectory, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['selectDirectory']>>
     >;
   },
   updateAudioPreferences: (request) => {
-    const payload = updateAudioPreferencesRequestSchema.parse(request);
-    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateAudioPreferences, payload) as Promise<
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateAudioPreferences, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['updateAudioPreferences']>>
     >;
   },
   updateAuthConfiguration: (request) => {
-    const payload = updateAuthConfigurationRequestSchema.parse(request);
-    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateAuthConfiguration, payload) as Promise<
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateAuthConfiguration, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['updateAuthConfiguration']>>
     >;
   },
   updateNotificationPreferences: (request) => {
-    const payload = updateNotificationPreferencesRequestSchema.parse(request);
-    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateNotificationPreferences, payload) as Promise<
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateNotificationPreferences, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['updateNotificationPreferences']>>
     >;
   },
   updateSessionAudioPreferences: (request) => {
-    const payload = updateSessionAudioPreferencesRequestSchema.parse(request);
-    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateSessionAudioPreferences, payload) as Promise<
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateSessionAudioPreferences, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['updateSessionAudioPreferences']>>
     >;
   },
   claude: {
     discover: (executable) => {
-      const payload = discoverClaudeRequestSchema.parse({ executable });
-      return ipcRenderer.invoke(IPC_CHANNELS.claudeDiscover, payload) as Promise<
+      return ipcRenderer.invoke(IPC_CHANNELS.claudeDiscover, { executable }) as Promise<
         Awaited<ReturnType<CommandDeckBridge['claude']['discover']>>
       >;
     },
@@ -88,14 +64,12 @@ const bridge: CommandDeckBridge = {
         Awaited<ReturnType<CommandDeckBridge['auth']['startRefresh']>>
       >,
     write: (request) => {
-      const payload = authWriteRequestSchema.parse(request);
-      return ipcRenderer.invoke(IPC_CHANNELS.authWrite, payload) as Promise<
+      return ipcRenderer.invoke(IPC_CHANNELS.authWrite, request) as Promise<
         Awaited<ReturnType<CommandDeckBridge['auth']['write']>>
       >;
     },
     resize: (request) => {
-      const payload = authResizeRequestSchema.parse(request);
-      return ipcRenderer.invoke(IPC_CHANNELS.authResize, payload) as Promise<
+      return ipcRenderer.invoke(IPC_CHANNELS.authResize, request) as Promise<
         Awaited<ReturnType<CommandDeckBridge['auth']['resize']>>
       >;
     },
@@ -118,32 +92,27 @@ const bridge: CommandDeckBridge = {
   },
   terminal: {
     startShell: (request) => {
-      const payload = startShellRequestSchema.parse(request);
-      return ipcRenderer.invoke(IPC_CHANNELS.terminalStartShell, payload) as Promise<
+      return ipcRenderer.invoke(IPC_CHANNELS.terminalStartShell, request) as Promise<
         Awaited<ReturnType<CommandDeckBridge['terminal']['startShell']>>
       >;
     },
     startClaude: (request) => {
-      const payload = startClaudeRequestSchema.parse(request);
-      return ipcRenderer.invoke(IPC_CHANNELS.terminalStartClaude, payload) as Promise<
+      return ipcRenderer.invoke(IPC_CHANNELS.terminalStartClaude, request) as Promise<
         Awaited<ReturnType<CommandDeckBridge['terminal']['startClaude']>>
       >;
     },
     write: (request) => {
-      const payload = terminalWriteRequestSchema.parse(request);
-      return ipcRenderer.invoke(IPC_CHANNELS.terminalWrite, payload) as Promise<
+      return ipcRenderer.invoke(IPC_CHANNELS.terminalWrite, request) as Promise<
         Awaited<ReturnType<CommandDeckBridge['terminal']['write']>>
       >;
     },
     resize: (request) => {
-      const payload = terminalResizeRequestSchema.parse(request);
-      return ipcRenderer.invoke(IPC_CHANNELS.terminalResize, payload) as Promise<
+      return ipcRenderer.invoke(IPC_CHANNELS.terminalResize, request) as Promise<
         Awaited<ReturnType<CommandDeckBridge['terminal']['resize']>>
       >;
     },
     stop: (request) => {
-      const payload = terminalStopRequestSchema.parse(request);
-      return ipcRenderer.invoke(IPC_CHANNELS.terminalStop, payload) as Promise<
+      return ipcRenderer.invoke(IPC_CHANNELS.terminalStop, request) as Promise<
         Awaited<ReturnType<CommandDeckBridge['terminal']['stop']>>
       >;
     },
@@ -171,5 +140,7 @@ const bridge: CommandDeckBridge = {
     },
   },
 };
+
+const { contextBridge, ipcRenderer } = electron;
 
 contextBridge.exposeInMainWorld('commandDeck', bridge);

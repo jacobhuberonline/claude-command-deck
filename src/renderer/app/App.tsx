@@ -109,6 +109,10 @@ function getBridge() {
   return window.commandDeck ?? fallbackBridge;
 }
 
+function hasDesktopBridge() {
+  return Boolean(window.commandDeck);
+}
+
 export function App() {
   const [appState, setAppState] = useState<AppStateSnapshot>(() => createPhaseOneState('loading'));
   const [focusedSessionId, setFocusedSessionId] = useState<SessionId>('session-1');
@@ -222,7 +226,24 @@ export function App() {
 
     void bridge.getAppState().then((snapshot) => {
       if (!cancelled) {
-        setAppState(markSameProjects(snapshot));
+        const checkedAt = new Date().toISOString();
+        setAppState(
+          markSameProjects({
+            ...snapshot,
+            diagnostics: [
+              ...snapshot.diagnostics.filter((diagnostic) => diagnostic.id !== 'desktop-bridge'),
+              {
+                id: 'desktop-bridge',
+                label: 'Desktop bridge',
+                status: hasDesktopBridge() ? 'pass' : 'warn',
+                detail: hasDesktopBridge()
+                  ? 'Electron preload bridge is available.'
+                  : 'Electron preload bridge is unavailable; desktop actions are disabled.',
+                checkedAt,
+              },
+            ],
+          }),
+        );
         setFocusedSessionId(snapshot.settings.focusedSessionId);
         setFocusMode(snapshot.settings.focusMode);
       }
