@@ -113,6 +113,22 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       }
 
       const key = event.key.toLowerCase();
+      if (key === 'v') {
+        if (!navigator.clipboard?.readText) {
+          return true;
+        }
+
+        void navigator.clipboard
+          .readText()
+          .then((text) => {
+            if (text) {
+              terminal.paste(text);
+            }
+          })
+          .catch(() => undefined);
+        return false;
+      }
+
       if (key === '+' || key === '=') {
         zoomTerminal(1);
         return false;
