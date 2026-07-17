@@ -63,7 +63,7 @@ button:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -71,19 +71,17 @@ button:focus-visible {
 
 .command-bar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(260px, 0.9fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
   align-items: center;
-  gap: 14px;
-  padding: 12px 16px 10px;
+  gap: 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid rgba(124, 151, 171, 0.16);
   background: rgba(10, 14, 19, 0.96);
 }
 
 .brand-block,
-.auth-summary,
 .command-actions,
 .count-strip,
-.rail-content,
 .bay-title,
 .bay-header,
 .bay-header-actions,
@@ -103,8 +101,8 @@ button:focus-visible {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border: 1px solid rgba(105, 201, 216, 0.38);
   border-radius: 7px;
   color: var(--cyan);
@@ -134,34 +132,8 @@ h1 {
   font-size: 12px;
 }
 
-.auth-summary {
-  gap: 8px;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid rgba(124, 151, 171, 0.18);
-  border-radius: var(--radius);
-  background: rgba(18, 25, 34, 0.72);
-}
-
-.auth-summary strong {
-  display: block;
-  color: var(--text);
-  font-size: 12px;
-}
-
-.auth-summary > div {
-  min-width: 0;
-}
-
-.auth-summary span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .count-strip {
-  gap: 8px;
+  gap: 6px;
   justify-content: end;
 }
 
@@ -170,7 +142,7 @@ h1 {
   grid-template-columns: auto auto;
   gap: 5px;
   align-items: baseline;
-  padding: 6px 8px;
+  padding: 5px 7px;
   border: 1px solid rgba(124, 151, 171, 0.16);
   border-radius: 7px;
   background: rgba(18, 25, 34, 0.68);
@@ -199,8 +171,7 @@ h1 {
 .control-button,
 .icon-button,
 .terminal-tool,
-.settings-nav button,
-.connection-rail {
+.settings-nav button {
   border: 1px solid rgba(124, 151, 171, 0.22);
   border-radius: 7px;
   background: rgba(18, 25, 34, 0.9);
@@ -212,8 +183,8 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
-  padding: 0 10px;
+  min-height: 30px;
+  padding: 0 9px;
   font-size: 12px;
   font-weight: 650;
 }
@@ -227,8 +198,8 @@ h1 {
 .terminal-tool {
   display: inline-grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
 }
 
 .icon-button.quiet,
@@ -247,62 +218,9 @@ h1 {
   font-weight: 700;
 }
 
-.connection-rail {
-  position: relative;
-  width: 100%;
-  min-height: 30px;
-  padding: 0;
-  border-width: 0 0 1px;
-  border-radius: 0;
-  text-align: left;
-  background: rgba(9, 12, 16, 0.94);
-}
-
-.rail-line {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 4px;
-  background: var(--subtle);
-}
-
-.rail-notConfigured .rail-line {
-  background: var(--subtle);
-}
-
-.rail-connected .rail-line {
-  background: var(--green);
-}
-
-.rail-checking .rail-line,
-.rail-refreshing .rail-line {
-  background: var(--cyan);
-}
-
-.rail-expiringSoon .rail-line {
-  background: var(--amber);
-}
-
-.rail-disconnected .rail-line,
-.rail-error .rail-line {
-  background: var(--red);
-}
-
-.rail-content {
-  gap: 7px;
-  padding: 6px 16px 6px 18px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.rail-content strong {
-  color: var(--text);
-}
-
 .deck-workspace {
   min-height: 0;
-  padding: 14px 16px;
+  padding: 10px 12px;
   overflow: hidden;
 }
 
@@ -310,14 +228,14 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: minmax(0, 1fr);
-  gap: 14px;
+  gap: 10px;
   height: 100%;
 }
 
 .session-focus-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 292px;
-  gap: 14px;
+  gap: 10px;
   height: 100%;
 }
 
@@ -387,8 +305,8 @@ h1 {
 
 .bay-header {
   justify-content: space-between;
-  gap: 10px;
-  padding: 12px 12px 8px 14px;
+  gap: 8px;
+  padding: 8px 10px 5px 12px;
 }
 
 .bay-title {
@@ -409,7 +327,7 @@ h1 {
 }
 
 .bay-title strong {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .status-dot {
@@ -457,15 +375,15 @@ h1 {
 .bay-meta {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  padding: 0 12px 10px 14px;
+  gap: 6px;
+  padding: 0 10px 6px 12px;
 }
 
 .meta-pair {
   display: grid;
   gap: 2px;
   min-width: 0;
-  padding: 7px 8px;
+  padding: 5px 7px;
   border: 1px solid rgba(124, 151, 171, 0.13);
   border-radius: 7px;
   background: rgba(7, 9, 12, 0.28);
@@ -493,7 +411,7 @@ h1 {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  margin: 0 12px;
+  margin: 0 10px;
   overflow: hidden;
   border: 1px solid rgba(124, 151, 171, 0.18);
   border-radius: 7px;
@@ -503,8 +421,8 @@ h1 {
 .terminal-toolbar {
   justify-content: space-between;
   gap: 8px;
-  min-height: 32px;
-  padding: 0 8px;
+  min-height: 28px;
+  padding: 0 6px;
   border-bottom: 1px solid rgba(124, 151, 171, 0.14);
   background: rgba(18, 25, 34, 0.72);
 }
@@ -548,7 +466,7 @@ h1 {
 .terminal-host {
   min-width: 0;
   min-height: 0;
-  padding: 8px;
+  padding: 6px;
   overflow: hidden;
 }
 
@@ -558,12 +476,15 @@ h1 {
 
 .terminal-host .xterm-viewport {
   background: transparent !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 151, 171, 0.42) transparent;
 }
 
 .terminal-placeholder {
   min-height: 0;
-  padding: 14px;
-  overflow: hidden;
+  padding: 10px;
+  overflow: auto;
   color: #9eb2bd;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 12px;
@@ -581,8 +502,8 @@ h1 {
 
 .bay-actions {
   flex-wrap: wrap;
-  gap: 7px;
-  padding: 10px 12px 12px 14px;
+  gap: 6px;
+  padding: 7px 10px 9px 12px;
   overflow: visible;
 }
 
@@ -610,11 +531,61 @@ h1 {
 
 .bottom-status {
   justify-content: space-between;
-  gap: 12px;
-  min-height: 34px;
-  padding: 0 16px;
+  gap: 10px;
+  min-height: 30px;
+  padding: 0 12px;
   border-top: 1px solid rgba(124, 151, 171, 0.16);
   background: rgba(8, 11, 15, 0.95);
+}
+
+.bottom-auth-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 46vw;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid rgba(124, 151, 171, 0.18);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(18, 25, 34, 0.72);
+  cursor: pointer;
+}
+
+.bottom-auth-status strong {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.bottom-auth-status span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottom-auth-status.rail-connected .status-dot {
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(121, 210, 155, 0.16);
+}
+
+.bottom-auth-status.rail-checking .status-dot,
+.bottom-auth-status.rail-refreshing .status-dot {
+  background: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(105, 201, 216, 0.16);
+}
+
+.bottom-auth-status.rail-expiringSoon .status-dot {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(230, 191, 115, 0.16);
+}
+
+.bottom-auth-status.rail-disconnected .status-dot,
+.bottom-auth-status.rail-error .status-dot {
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(237, 129, 129, 0.16);
 }
 
 .settings-backdrop {
@@ -853,10 +824,6 @@ h1 {
 
   .command-bar {
     grid-template-columns: 1fr auto;
-  }
-
-  .auth-summary {
-    grid-column: 1 / 2;
   }
 
   .count-strip {

@@ -2,7 +2,6 @@ import {
   BellOff,
   CheckCircle2,
   Gauge,
-  Loader2,
   RefreshCcw,
   RotateCcw,
   Settings,
@@ -61,20 +60,6 @@ export function CommandBar({
         <div>
           <h1>Claude Command Deck</h1>
           <span>Local session command center</span>
-        </div>
-      </div>
-
-      <div className="auth-summary" aria-label={`Authentication status: ${auth.label}`}>
-        {auth.status === 'checking' ? (
-          <Loader2 className="spin" size={16} aria-hidden="true" />
-        ) : (
-          <CheckCircle2 size={16} aria-hidden="true" />
-        )}
-        <div>
-          <strong>{auth.label}</strong>
-          <span>
-            {auth.lastSuccessfulCheckAt ? `Last check ${auth.lastSuccessfulCheckAt}` : auth.details}
-          </span>
         </div>
       </div>
 

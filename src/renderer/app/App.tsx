@@ -17,7 +17,6 @@ import type {
 import type { CommandDeckBridge } from '../../shared/ipc/contracts';
 import { AuthConsole } from '../components/auth-console/AuthConsole';
 import { CommandBar } from '../components/command-bar/CommandBar';
-import { ConnectionRail } from '../components/connection-rail/ConnectionRail';
 import { SessionGrid } from '../components/session-bay/SessionGrid';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import {
@@ -999,10 +998,6 @@ export function App() {
           });
         }}
       />
-      <ConnectionRail
-        auth={appState.auth}
-        onOpenDetails={() => setSettingsSection('authentication')}
-      />
       <main className="deck-workspace" aria-label="Claude session deck">
         <SessionGrid
           sessions={appState.sessions}
@@ -1034,6 +1029,16 @@ export function App() {
       </main>
       <footer className="bottom-status" aria-label="Application status">
         <span>{focusedSession?.configuration.name ?? 'No focused session'}</span>
+        <button
+          className={`bottom-auth-status rail-${appState.auth.status}`}
+          type="button"
+          onClick={() => setSettingsSection('authentication')}
+          title={appState.auth.details}
+        >
+          <span className="status-dot" aria-hidden="true" />
+          <strong>{appState.auth.label}</strong>
+          <span>{appState.auth.details}</span>
+        </button>
         <span>Alt+1-4 focus bays</span>
         <span>Alt+F focus mode</span>
         <span>v{appState.appVersion}</span>

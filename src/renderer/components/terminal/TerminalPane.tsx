@@ -19,6 +19,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
+  const initialStatusMessageRef = useRef(session.runtime.statusMessage);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -73,7 +74,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
     terminal.writeln('\x1b[36mLOCAL SYSTEM\x1b[0m');
-    terminal.writeln(session.runtime.statusMessage);
+    terminal.writeln(initialStatusMessageRef.current);
 
     const dataDisposable = terminal.onData((data) => {
       void terminalBridge.write({ sessionId: session.configuration.id, data });
@@ -136,12 +137,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       fitAddonRef.current = null;
       searchAddonRef.current = null;
     };
-  }, [
-    session.configuration.id,
-    session.configuration.scrollback,
-    session.runtime.statusMessage,
-    terminalBridge,
-  ]);
+  }, [session.configuration.id, session.configuration.scrollback, terminalBridge]);
 
   const copySelection = () => {
     const selection = terminalRef.current?.getSelection();
