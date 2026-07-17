@@ -18,19 +18,6 @@ interface SessionWorkbenchProps {
   terminalBridge: TerminalBridge;
 }
 
-const processLabels: Record<ProcessState, string> = {
-  empty: 'Empty',
-  validating: 'Validating',
-  starting: 'Starting',
-  running: 'Running',
-  restarting: 'Restarting',
-  stopping: 'Stopping',
-  stopped: 'Stopped',
-  crashed: 'Crashed',
-  waitingForAuthentication: 'Waiting',
-  error: 'Error',
-};
-
 export function SessionWorkbench({
   session,
   onLaunchClaude,
@@ -89,67 +76,71 @@ export function SessionWorkbench({
 
   return (
     <section className="session-workbench" aria-label={`${configuration.name} session controls`}>
-      <div className="workbench-summary">
-        <span className={`workbench-state state-${runtime.processState}`}>
-          {processLabels[runtime.processState]}
-        </span>
-        <strong>
+      <div className="workbench-toolbar">
+        <span className={`workbench-status state-${runtime.processState}`}>
           {runtime.activityState === 'active' ? 'Claude is working' : runtime.statusMessage}
-        </strong>
-        <span>{configuration.workingDirectory || 'No directory selected'}</span>
-      </div>
+        </span>
 
-      <div className="workbench-actions" aria-label={`${configuration.name} actions`}>
-        {!hasDirectory ? (
-          <button
-            className="control-button primary"
-            type="button"
-            onClick={() => onSelectDirectory(configuration.id)}
-          >
-            <FolderPen size={15} aria-hidden="true" />
-            <span>Directory</span>
-          </button>
-        ) : (
-          <>
+        <div className="workbench-actions" aria-label={`${configuration.name} actions`}>
+          {!hasDirectory ? (
             <button
               className="control-button primary"
               type="button"
-              onClick={() => onLaunchClaude(configuration.id, 'continueMostRecent')}
+              onClick={() => onSelectDirectory(configuration.id)}
             >
-              <RotateCcw size={15} aria-hidden="true" />
-              <span>Continue</span>
+              <FolderPen size={15} aria-hidden="true" />
+              <span>Directory</span>
             </button>
-            <button
-              className="control-button"
-              type="button"
-              onClick={() => onLaunchClaude(configuration.id, 'new')}
-            >
-              <Play size={15} aria-hidden="true" />
-              <span>New</span>
-            </button>
-            <button
-              className="control-button"
-              type="button"
-              onClick={() => onLaunchClaude(configuration.id, 'resumeSpecific')}
-            >
-              <RotateCcw size={15} aria-hidden="true" />
-              <span>Resume</span>
-            </button>
-            <button className="control-button" type="button" onClick={startShell}>
-              <TerminalSquare size={15} aria-hidden="true" />
-              <span>Shell</span>
-            </button>
-          </>
-        )}
-        <button
-          className="control-button"
-          type="button"
-          disabled={!canStop}
-          onClick={() => onStopSession(configuration.id)}
-        >
-          <Square size={14} aria-hidden="true" />
-          <span>Stop</span>
-        </button>
+          ) : (
+            <>
+              <button
+                className="control-button primary"
+                type="button"
+                onClick={() => onLaunchClaude(configuration.id, 'continueMostRecent')}
+              >
+                <RotateCcw size={15} aria-hidden="true" />
+                <span>Continue</span>
+              </button>
+              <button
+                className="control-button"
+                type="button"
+                onClick={() => onLaunchClaude(configuration.id, 'new')}
+              >
+                <Play size={15} aria-hidden="true" />
+                <span>New</span>
+              </button>
+              <button
+                className="control-button"
+                type="button"
+                onClick={() => onLaunchClaude(configuration.id, 'resumeSpecific')}
+              >
+                <RotateCcw size={15} aria-hidden="true" />
+                <span>Resume</span>
+              </button>
+              <button className="control-button" type="button" onClick={startShell}>
+                <TerminalSquare size={15} aria-hidden="true" />
+                <span>Shell</span>
+              </button>
+            </>
+          )}
+          <button
+            className="control-button"
+            type="button"
+            disabled={!canStop}
+            onClick={() => onStopSession(configuration.id)}
+          >
+            <Square size={14} aria-hidden="true" />
+            <span>Stop</span>
+          </button>
+          <button
+            className="control-button"
+            type="button"
+            onClick={() => setConsoleOpen((current) => !current)}
+          >
+            <TerminalSquare size={15} aria-hidden="true" />
+            <span>{consoleOpen ? 'Hide Console' : 'Console'}</span>
+          </button>
+        </div>
       </div>
 
       <form className="prompt-composer" onSubmit={onSubmit}>
@@ -176,32 +167,13 @@ export function SessionWorkbench({
       </form>
       {promptError ? <span className="prompt-error">{promptError}</span> : null}
 
-      <div className="workbench-output" aria-label={`${configuration.name} output`}>
-        {runtime.outputPreview ? (
+      {runtime.outputPreview ? (
+        <div className="workbench-output" aria-label={`${configuration.name} output`}>
           <pre>{runtime.outputPreview}</pre>
-        ) : (
-          <span>No session output</span>
-        )}
-      </div>
+        </div>
+      ) : null}
 
-      <div className={consoleOpen ? 'console-drawer open' : 'console-drawer'}>
-        <button
-          className="console-toggle"
-          type="button"
-          onClick={() => setConsoleOpen((current) => !current)}
-        >
-          <TerminalSquare size={15} aria-hidden="true" />
-          <span>{consoleOpen ? 'Hide Console' : 'Open Console'}</span>
-        </button>
-        {consoleOpen ? (
-          <TerminalPane session={session} terminalBridge={terminalBridge} />
-        ) : (
-          <div className="console-collapsed">
-            <TerminalSquare size={16} aria-hidden="true" />
-            <span>Console hidden</span>
-          </div>
-        )}
-      </div>
+      {consoleOpen ? <TerminalPane session={session} terminalBridge={terminalBridge} /> : null}
     </section>
   );
 }

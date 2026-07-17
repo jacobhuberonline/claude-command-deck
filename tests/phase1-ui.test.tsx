@@ -97,7 +97,7 @@ describe('phase 1 visual shell', () => {
     });
     expect(within(article).queryByText('Terminal test adapter')).not.toBeInTheDocument();
 
-    fireEvent.click(within(article).getByRole('button', { name: 'Open Console' }));
+    fireEvent.click(within(article).getByRole('button', { name: 'Console' }));
 
     expect(await within(article).findByText('Terminal test adapter')).toBeInTheDocument();
   });
