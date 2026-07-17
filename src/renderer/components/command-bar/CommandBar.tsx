@@ -23,8 +23,7 @@ interface CommandBarProps {
   onOpenSettings: () => void;
   onToggleFocusMode: () => void;
   onReloadAll: () => void;
-  onCheckConnection: () => void;
-  onRefreshCredentials: () => void;
+  onAuthAction: () => void;
   onToggleAudio: () => void;
 }
 
@@ -36,8 +35,7 @@ export function CommandBar({
   onOpenSettings,
   onToggleFocusMode,
   onReloadAll,
-  onCheckConnection,
-  onRefreshCredentials,
+  onAuthAction,
   onToggleAudio,
 }: CommandBarProps) {
   const running = sessions.filter((session) => session.runtime.processState === 'running').length;
@@ -49,6 +47,10 @@ export function CommandBar({
   ).length;
   const attention = sessions.filter((session) => session.runtime.attention).length;
   const AudioIcon = audio.masterEnabled ? Volume2 : VolumeX;
+  const authBusy = auth.status === 'checking' || auth.status === 'refreshing';
+  const authActionLabel =
+    auth.status === 'connected' ? 'Check' : authBusy ? authLabel(auth.status) : 'Connect';
+  const AuthActionIcon = auth.status === 'connected' ? CheckCircle2 : RefreshCcw;
 
   return (
     <header className="command-bar">
@@ -87,22 +89,13 @@ export function CommandBar({
         <button
           className="control-button"
           type="button"
-          title="Check Connection"
-          aria-label="Check Connection"
-          onClick={onCheckConnection}
+          title={auth.status === 'connected' ? 'Check Connection' : 'Connect Authentication'}
+          aria-label={auth.status === 'connected' ? 'Check Connection' : 'Connect Authentication'}
+          disabled={authBusy}
+          onClick={onAuthAction}
         >
-          <CheckCircle2 size={16} aria-hidden="true" />
-          <span>Check</span>
-        </button>
-        <button
-          className="control-button"
-          type="button"
-          title="Refresh Credentials"
-          aria-label="Refresh Credentials"
-          onClick={onRefreshCredentials}
-        >
-          <RefreshCcw size={16} aria-hidden="true" />
-          <span>Refresh</span>
+          <AuthActionIcon className={authBusy ? 'spin' : ''} size={16} aria-hidden="true" />
+          <span>{authActionLabel}</span>
         </button>
         <button
           className="control-button primary"
@@ -167,4 +160,16 @@ function Metric({
       <span>{label}</span>
     </span>
   );
+}
+
+function authLabel(status: AuthStateSnapshot['status']) {
+  if (status === 'checking') {
+    return 'Checking';
+  }
+
+  if (status === 'refreshing') {
+    return 'Refreshing';
+  }
+
+  return 'Connect';
 }

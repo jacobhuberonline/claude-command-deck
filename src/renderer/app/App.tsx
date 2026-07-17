@@ -894,7 +894,7 @@ export function App() {
     }
   }
 
-  async function checkConnection() {
+  const checkConnection = useCallback(async () => {
     const previousStatus = appStateRef.current.auth.status;
     setAppState((current) => ({
       ...current,
@@ -926,7 +926,56 @@ export function App() {
     if (event) {
       emitSemanticEvents([event]);
     }
+  }, [bridge, emitSemanticEvents]);
+
+  async function connectAuthentication() {
+    if (appStateRef.current.auth.status === 'connected') {
+      await checkConnection();
+      return;
+    }
+
+    setAppState((current) => ({
+      ...current,
+      auth: {
+        ...current.auth,
+        status: 'refreshing',
+        label: 'Refreshing',
+        details: 'Starting credential refresh.',
+      },
+    }));
+
+    const result = await bridge.auth.startRefresh();
+    if (!result.ok) {
+      setAppState((current) => ({
+        ...current,
+        auth: {
+          ...current.auth,
+          status: 'error',
+          label: 'Authentication error',
+          details: result.error,
+        },
+      }));
+    }
   }
+
+  useEffect(() => {
+    return bridge.auth.onExit((event) => {
+      if (event.exitCode === 0) {
+        void checkConnection();
+        return;
+      }
+
+      setAppState((current) => ({
+        ...current,
+        auth: {
+          ...current.auth,
+          status: 'disconnected',
+          label: 'Disconnected',
+          details: `Refresh exited with code ${event.exitCode ?? 'unknown'}.`,
+        },
+      }));
+    });
+  }, [bridge, checkConnection]);
 
   return (
     <div className="app-shell">
@@ -940,10 +989,9 @@ export function App() {
         onReloadAll={() => {
           void reloadAll();
         }}
-        onCheckConnection={() => {
-          void checkConnection();
+        onAuthAction={() => {
+          void connectAuthentication();
         }}
-        onRefreshCredentials={() => setAuthConsoleOpen(true)}
         onToggleAudio={() => {
           void updateAudioPreferences({
             ...appState.settings.audio,
