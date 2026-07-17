@@ -128,7 +128,7 @@ export function CommandBar({
           className={`icon-button auth-status-icon auth-${auth.status}`}
           type="button"
           title={`${auth.label}: ${auth.details}`}
-          aria-label={auth.status === 'connected' ? 'Check Connection' : 'Connect Authentication'}
+          aria-label="Verify or connect authentication"
           disabled={authBusy}
           onClick={onAuthAction}
         >

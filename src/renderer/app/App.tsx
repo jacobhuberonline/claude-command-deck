@@ -112,6 +112,7 @@ const soundAssetNames = [
 ];
 
 const usageStorageKey = 'claude-command-deck:last-usage';
+const minimumAuthCheckIntervalSeconds = 30;
 
 function getBridge() {
   return window.commandDeck ?? fallbackBridge;
@@ -161,6 +162,7 @@ export function App() {
   const appStateRef = useRef(appState);
   const focusedSessionIdRef = useRef(focusedSessionId);
   const startupAuthAttemptedRef = useRef(false);
+  const appStateLoadedRef = useRef(false);
 
   useEffect(() => {
     appStateRef.current = appState;
@@ -248,6 +250,7 @@ export function App() {
     void bridge.getAppState().then((snapshot) => {
       if (!cancelled) {
         const checkedAt = new Date().toISOString();
+        appStateLoadedRef.current = true;
         setAppState(
           markSameProjects({
             ...snapshot,
@@ -978,6 +981,7 @@ export function App() {
         status: 'checking',
         label: 'Checking',
         details: 'Running credential check command.',
+        nextScheduledCheckAt: undefined,
       },
     }));
 
@@ -994,6 +998,7 @@ export function App() {
         lastCheckedAt: result.checkedAt,
         lastSuccessfulCheckAt:
           result.status === 'connected' ? result.checkedAt : current.auth.lastSuccessfulCheckAt,
+        nextScheduledCheckAt: getNextAuthCheckAt(result.checkedAt, current.settings.auth),
       },
     }));
 
@@ -1005,12 +1010,22 @@ export function App() {
     return result;
   }, [bridge, emitSemanticEvents]);
 
-  const connectAuthentication = useCallback(async () => {
-    if (appStateRef.current.auth.status === 'connected') {
-      await checkConnection();
+  const startAuthRefresh = useCallback(async () => {
+    const auth = appStateRef.current.settings.auth;
+    if (!isAuthRefreshConfigured(auth)) {
+      setAppState((current) => ({
+        ...current,
+        auth: {
+          ...current.auth,
+          status: 'disconnected',
+          label: 'Disconnected',
+          details: 'Credential refresh command is not configured.',
+        },
+      }));
       return;
     }
 
+    setAuthConsoleOpen(true);
     setAppState((current) => ({
       ...current,
       auth: {
@@ -1033,11 +1048,76 @@ export function App() {
         },
       }));
     }
-  }, [bridge, checkConnection]);
+  }, [bridge]);
+
+  const connectAuthentication = useCallback(async () => {
+    const auth = appStateRef.current.settings.auth;
+    if (!isAuthCheckConfigured(auth)) {
+      setSettingsSection('authentication');
+      return;
+    }
+
+    const result = await checkConnection();
+    if (result.status === 'connected' || result.status === 'notConfigured') {
+      return;
+    }
+
+    await startAuthRefresh();
+  }, [checkConnection, startAuthRefresh]);
+
+  useEffect(() => {
+    if (!appStateLoadedRef.current) {
+      return undefined;
+    }
+
+    const current = appStateRef.current;
+    const dueAt = getNextAuthCheckDueAt(current);
+    if (dueAt === null || isAuthBusy(current.auth.status)) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(
+      () => {
+        if (shouldRunScheduledAuthCheck(appStateRef.current)) {
+          void checkConnection();
+        }
+      },
+      Math.max(1000, dueAt - Date.now()),
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    appState.auth.lastCheckedAt,
+    appState.auth.status,
+    appState.settings.auth.checkExecutable,
+    appState.settings.auth.checkIntervalSeconds,
+    appState.settings.auth.provider,
+    checkConnection,
+  ]);
+
+  useEffect(() => {
+    const checkIfStale = () => {
+      if (!appStateLoadedRef.current || document.visibilityState === 'hidden') {
+        return;
+      }
+
+      if (shouldRunScheduledAuthCheck(appStateRef.current)) {
+        void checkConnection();
+      }
+    };
+
+    window.addEventListener('focus', checkIfStale);
+    document.addEventListener('visibilitychange', checkIfStale);
+    return () => {
+      window.removeEventListener('focus', checkIfStale);
+      document.removeEventListener('visibilitychange', checkIfStale);
+    };
+  }, [checkConnection]);
 
   useEffect(() => {
     const auth = appState.settings.auth;
     if (
+      !appStateLoadedRef.current ||
       startupAuthAttemptedRef.current ||
       !auth.startupChecksEnabled ||
       auth.provider === 'disabled' ||
@@ -1050,14 +1130,14 @@ export function App() {
     void checkConnection().then((result) => {
       if (
         result.status === 'connected' ||
-        !appStateRef.current.settings.auth.refreshExecutable.trim()
+        !isAuthRefreshConfigured(appStateRef.current.settings.auth)
       ) {
         return;
       }
 
-      void connectAuthentication();
+      void startAuthRefresh();
     });
-  }, [appState.settings.auth, checkConnection, connectAuthentication]);
+  }, [appState.settings.auth, checkConnection, startAuthRefresh]);
 
   useEffect(() => {
     return bridge.auth.onExit((event) => {
@@ -1256,6 +1336,57 @@ function isBusy(activityState: AppStateSnapshot['sessions'][number]['runtime']['
     activityState === 'likelyAwaitingInput' ||
     activityState === 'possiblePermissionPrompt'
   );
+}
+
+function isAuthCheckConfigured(auth: AuthConfiguration) {
+  return auth.provider !== 'disabled' && auth.checkExecutable.trim().length > 0;
+}
+
+function isAuthRefreshConfigured(auth: AuthConfiguration) {
+  return auth.provider !== 'disabled' && auth.refreshExecutable.trim().length > 0;
+}
+
+function isAuthBusy(status: AuthStatus) {
+  return status === 'checking' || status === 'refreshing';
+}
+
+function getAuthCheckIntervalMs(auth: AuthConfiguration) {
+  return Math.max(auth.checkIntervalSeconds, minimumAuthCheckIntervalSeconds) * 1000;
+}
+
+function getNextAuthCheckAt(checkedAt: string, auth: AuthConfiguration) {
+  if (!isAuthCheckConfigured(auth)) {
+    return undefined;
+  }
+
+  const checkedAtMs = Date.parse(checkedAt);
+  const base = Number.isNaN(checkedAtMs) ? Date.now() : checkedAtMs;
+  return new Date(base + getAuthCheckIntervalMs(auth)).toISOString();
+}
+
+function getNextAuthCheckDueAt(state: AppStateSnapshot) {
+  if (!isAuthCheckConfigured(state.settings.auth)) {
+    return null;
+  }
+
+  const lastCheckedAt = state.auth.lastCheckedAt
+    ? Date.parse(state.auth.lastCheckedAt)
+    : Date.now();
+  const base = Number.isNaN(lastCheckedAt) ? Date.now() : lastCheckedAt;
+  return base + getAuthCheckIntervalMs(state.settings.auth);
+}
+
+function shouldRunScheduledAuthCheck(state: AppStateSnapshot) {
+  if (!isAuthCheckConfigured(state.settings.auth) || isAuthBusy(state.auth.status)) {
+    return false;
+  }
+
+  if (!state.auth.lastCheckedAt) {
+    return true;
+  }
+
+  const dueAt = getNextAuthCheckDueAt(state);
+  return dueAt !== null && Date.now() >= dueAt;
 }
 
 function delay(ms: number) {

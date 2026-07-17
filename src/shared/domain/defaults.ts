@@ -65,7 +65,7 @@ export const defaultAuthConfiguration: AuthConfiguration = {
   refreshArgs: [],
   workingDirectory: '',
   shellMode: false,
-  checkIntervalSeconds: 300,
+  checkIntervalSeconds: 3600,
   checkTimeoutSeconds: 15,
   expirationWarningMinutes: 15,
   startupChecksEnabled: true,
