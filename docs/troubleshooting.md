@@ -4,6 +4,10 @@
 
 Run `npm run build` first. The Electron entrypoint expects built files under `out/`. During development, use `npm run dev`.
 
+## Electron Uninstall Error On Windows
+
+If `npm run dev` prints `Error: Electron uninstall`, the Electron package installed but its downloaded Windows executable is missing. Run `node node_modules\electron\install.js`, then run `npm run dev` again. If that still fails, run `rmdir /s /q node_modules`, `npm cache verify`, and `npm ci`.
+
 ## PTY Fails To Start
 
 Run `npm install` again so the `postinstall` guard can repair the `node-pty` helper permissions. On Windows, verify PowerShell 7 (`pwsh.exe`) is installed or let the app fall back to Windows PowerShell.

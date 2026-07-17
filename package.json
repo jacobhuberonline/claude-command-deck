@@ -14,7 +14,7 @@
     "format:write": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "node scripts/ensure-node-pty-helper.mjs",
+    "postinstall": "node scripts/ensure-node-pty-helper.mjs && node scripts/ensure-electron.mjs",
     "generate:sounds": "tsx scripts/generate-sounds.ts",
     "package:dir": "electron-builder --dir",
     "package:win": "electron-builder --win --dir"
