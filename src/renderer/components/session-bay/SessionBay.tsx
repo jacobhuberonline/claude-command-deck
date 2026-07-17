@@ -73,6 +73,9 @@ export function SessionBay({
     runtime.activityState === 'possiblePermissionPrompt' ||
     runtime.activityState === 'authenticationMayBeRequired';
   const showTerminal = !isCompact;
+  const directoryChangeDisabled = ['starting', 'running', 'restarting', 'stopping'].includes(
+    runtime.processState,
+  );
 
   return (
     <article
@@ -201,8 +204,16 @@ export function SessionBay({
         <button
           className="icon-button quiet"
           type="button"
-          title="Open directory"
-          aria-label="Open directory"
+          title={
+            directoryChangeDisabled
+              ? 'Stop the session before changing directory'
+              : 'Change directory'
+          }
+          aria-label="Change directory"
+          disabled={directoryChangeDisabled}
+          onClick={() => {
+            void onSelectDirectory(configuration.id);
+          }}
         >
           <FolderOpen size={15} aria-hidden="true" />
         </button>
