@@ -49,7 +49,7 @@ export class AuthService {
     }
 
     try {
-      const command = buildRefreshCommand(auth.refreshExecutable, auth.refreshArgs, auth.shellMode);
+      const command = buildShellCommand(auth.refreshExecutable, auth.refreshArgs, auth.shellMode);
       this.refreshProcess = pty.spawn(command.executable, command.args, {
         name: 'xterm-256color',
         cols: 100,
@@ -143,9 +143,10 @@ export class AuthService {
       let stdout = '';
       let stderr = '';
       let settled = false;
-      const child = spawn(auth.checkExecutable, auth.checkArgs, {
+      const command = buildShellCommand(auth.checkExecutable, auth.checkArgs, auth.shellMode);
+      const child = spawn(command.executable, command.args, {
         cwd: auth.workingDirectory || process.cwd(),
-        shell: auth.shellMode,
+        shell: false,
         windowsHide: true,
       });
 
@@ -201,7 +202,7 @@ export class AuthService {
   }
 }
 
-function buildRefreshCommand(executable: string, args: string[], shellMode: boolean) {
+function buildShellCommand(executable: string, args: string[], shellMode: boolean) {
   if (!shellMode) {
     return { executable, args };
   }
