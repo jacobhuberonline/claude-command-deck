@@ -22,6 +22,9 @@ export default defineConfig({
         input: {
           index: resolve(projectRoot, 'src/preload/index.ts'),
         },
+        output: {
+          format: 'cjs',
+        },
       },
     },
   },
