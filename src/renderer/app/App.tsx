@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildClaudeCommand } from '../../shared/claude/ClaudeCommandBuilder';
-import { createPhaseOneState } from '../../shared/domain/defaults';
+import { createPhaseOneState, defaultGlobalAssistantModel } from '../../shared/domain/defaults';
 import type {
   AppStateSnapshot,
   AuthCheckResult,
@@ -12,6 +12,7 @@ import type {
   NotificationPreferences,
   ProcessState,
   SessionAudioPreferences,
+  SessionConfiguration,
   SessionId,
   SessionLaunchMode,
   SettingsSection,
@@ -35,6 +36,7 @@ import {
 
 const fallbackBridge = {
   getAppState: () => Promise.resolve(createPhaseOneState('browser-preview')),
+  onShortcut: () => () => undefined,
   openDirectory: () =>
     Promise.resolve({ ok: false as const, error: 'Desktop shell is not available.' }),
   openLogDirectory: () =>
@@ -48,6 +50,7 @@ const fallbackBridge = {
   updateAuthConfiguration: () => Promise.resolve({ ok: true as const }),
   updateAudioPreferences: () => Promise.resolve({ ok: true as const }),
   updateNotificationPreferences: () => Promise.resolve({ ok: true as const }),
+  updateSessionConfiguration: () => Promise.resolve({ ok: true as const }),
   updateSessionAudioPreferences: () => Promise.resolve({ ok: true as const }),
   claude: {
     discover: (executable: string) =>
@@ -180,6 +183,14 @@ export function App() {
       minimumActivityMs: appState.settings.audio.minimumActivityMs,
     });
   }, [appState.settings.audio.minimumActivityMs]);
+
+  const focusGlobalAssistant = useCallback(() => {
+    const globalAssistant = getGlobalAssistantSession(appStateRef.current.sessions);
+    if (globalAssistant) {
+      setFocusedSessionId(globalAssistant.configuration.id);
+      setFocusMode(true);
+    }
+  }, []);
 
   const updateRuntime = useCallback(
     (
@@ -391,6 +402,14 @@ export function App() {
   }, [bridge, emitSemanticEvents, updateRuntime]);
 
   useEffect(() => {
+    return bridge.onShortcut((event) => {
+      if (event.shortcut === 'focusGlobalAssistant') {
+        focusGlobalAssistant();
+      }
+    });
+  }, [bridge, focusGlobalAssistant]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => {
       const current = appStateRef.current;
       const activityUpdates = current.sessions
@@ -439,31 +458,39 @@ export function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      const isTerminalInput = target?.closest('.xterm') !== null;
+      const isHtmlTarget = target instanceof HTMLElement;
+      const isTerminalInput = isHtmlTarget && target.closest('.xterm') !== null;
       const isTyping =
         !isTerminalInput &&
-        (target?.tagName === 'INPUT' ||
-          target?.tagName === 'TEXTAREA' ||
-          target?.isContentEditable === true);
+        isHtmlTarget &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable === true);
 
       if (isTyping) {
         return;
       }
 
-      if (event.altKey && ['1', '2', '3', '4'].includes(event.key)) {
+      const shortcutIndex = sessionShortcutIndex(event);
+      if (shortcutIndex !== null) {
         event.preventDefault();
-        const session = appState.sessions[Number(event.key) - 1];
+        const session = appState.sessions[shortcutIndex];
         if (session) {
           setFocusedSessionId(session.configuration.id);
         }
       }
 
-      if (event.altKey && event.key.toLowerCase() === 'f') {
+      if (isAltShortcut(event, 'f', 'KeyF')) {
         event.preventDefault();
         setFocusMode((current) => !current);
       }
 
-      if (event.altKey && event.key.toLowerCase() === ',') {
+      if (isGlobalAssistantShortcut(event)) {
+        event.preventDefault();
+        focusGlobalAssistant();
+      }
+
+      if (isAltShortcut(event, ',', 'Comma')) {
         event.preventDefault();
         setSettingsSection('general');
       }
@@ -471,7 +498,7 @@ export function App() {
 
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [appState.sessions]);
+  }, [appState.sessions, focusGlobalAssistant]);
 
   const focusedSession = useMemo(
     () =>
@@ -598,6 +625,35 @@ export function App() {
     }
   }
 
+  async function updateSessionConfiguration(configuration: SessionConfiguration) {
+    const nextConfiguration = normalizeSessionConfiguration(configuration);
+
+    setAppState((current) =>
+      markSameProjects({
+        ...current,
+        settings: {
+          ...current.settings,
+          sessions: current.settings.sessions.map((session) =>
+            session.id === nextConfiguration.id ? nextConfiguration : session,
+          ),
+        },
+        sessions: current.sessions.map((session) =>
+          session.configuration.id === nextConfiguration.id
+            ? {
+                ...session,
+                configuration: nextConfiguration,
+              }
+            : session,
+        ),
+      }),
+    );
+
+    const result = await bridge.updateSessionConfiguration({ configuration: nextConfiguration });
+    if (!result.ok) {
+      addPreferenceDiagnostic('session-configuration', 'Session configuration', result.error);
+    }
+  }
+
   async function openLogDirectory() {
     const result = await bridge.openLogDirectory();
     if (!result.ok) {
@@ -718,6 +774,7 @@ export function App() {
       baseArgs: session.configuration.args.length
         ? session.configuration.args
         : appState.settings.claudeBaseArgs,
+      model: session.configuration.model,
       launchMode,
       capabilities: claudeDiscovery.capabilities,
     });
@@ -882,7 +939,8 @@ export function App() {
 
   async function reloadAll() {
     const candidates = appState.sessions.filter(
-      (session) => session.configuration.workingDirectory,
+      (session) =>
+        session.configuration.role !== 'globalAssistant' && session.configuration.workingDirectory,
     );
     if (candidates.length === 0) {
       return;
@@ -942,7 +1000,10 @@ export function App() {
                 configuration: {
                   ...session.configuration,
                   workingDirectory: result.directory,
-                  name: directoryLeaf(result.directory),
+                  name:
+                    session.configuration.role === 'globalAssistant'
+                      ? session.configuration.name
+                      : directoryLeaf(result.directory),
                 },
                 runtime: {
                   ...session.runtime,
@@ -1219,6 +1280,7 @@ export function App() {
         audio={appState.settings.audio}
         onOpenSettings={() => setSettingsSection('general')}
         onToggleFocusMode={() => setFocusMode((current) => !current)}
+        onFocusGlobalAssistant={focusGlobalAssistant}
         onReloadAll={() => {
           void reloadAll();
         }}
@@ -1261,6 +1323,7 @@ export function App() {
       <footer className="bottom-status" aria-label="Application status">
         <span>{focusedSession?.configuration.name ?? 'No focused session'}</span>
         <span>Alt+1-4 focus bays</span>
+        <span>Alt+1 global assistant</span>
         <span>Alt+F focus mode</span>
         <span>v{appState.appVersion}</span>
       </footer>
@@ -1278,8 +1341,14 @@ export function App() {
         onUpdateNotificationPreferences={(preferences) => {
           void updateNotificationPreferences(preferences);
         }}
+        onUpdateSessionConfiguration={(configuration) => {
+          void updateSessionConfiguration(configuration);
+        }}
         onUpdateSessionAudioPreferences={(sessionId, preferences) => {
           void updateSessionAudioPreferences(sessionId, preferences);
+        }}
+        onSelectDirectory={(sessionId) => {
+          void selectDirectory(sessionId);
         }}
         onTestAudio={(event) => {
           emitSemanticEvents([event], { forceAudio: true });
@@ -1321,6 +1390,52 @@ function markSameProjects(snapshot: AppStateSnapshot): AppStateSnapshot {
         },
       };
     }),
+  };
+}
+
+function sessionShortcutIndex(event: KeyboardEvent): number | null {
+  if (!event.altKey) {
+    return null;
+  }
+
+  const keyIndex = ['1', '2', '3', '4'].indexOf(event.key);
+  if (keyIndex >= 0) {
+    return keyIndex;
+  }
+
+  const codeIndex = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(event.code);
+  return codeIndex >= 0 ? codeIndex : null;
+}
+
+function isAltShortcut(event: KeyboardEvent, key: string, code: string): boolean {
+  return event.altKey && (event.key.toLowerCase() === key || event.code === code);
+}
+
+function isGlobalAssistantShortcut(event: KeyboardEvent): boolean {
+  if (event.getModifierState('AltGraph')) {
+    return false;
+  }
+
+  return isAltShortcut(event, 'g', 'KeyG') || isAltShortcut(event, '0', 'Digit0');
+}
+
+function getGlobalAssistantSession(sessions: AppStateSnapshot['sessions']) {
+  return (
+    sessions.find((session) => session.configuration.role === 'globalAssistant') ?? sessions[0]
+  );
+}
+
+function normalizeSessionConfiguration(configuration: SessionConfiguration): SessionConfiguration {
+  if (configuration.role === 'globalAssistant') {
+    return {
+      ...configuration,
+      model: configuration.model.trim() || defaultGlobalAssistantModel,
+    };
+  }
+
+  return {
+    ...configuration,
+    model: configuration.model.trim(),
   };
 }
 

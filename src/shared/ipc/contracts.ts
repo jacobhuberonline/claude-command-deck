@@ -7,8 +7,15 @@ import type {
   ManagedProcessSnapshot,
   NotificationPreferences,
   SessionAudioPreferences,
+  SessionConfiguration,
   SessionId,
 } from '../domain/types';
+
+export type AppShortcut = 'focusGlobalAssistant';
+
+export interface AppShortcutEvent {
+  shortcut: AppShortcut;
+}
 
 export interface OpenDirectoryRequest {
   sessionId: SessionId;
@@ -28,6 +35,10 @@ export interface UpdateAuthConfigurationRequest {
 
 export interface UpdateNotificationPreferencesRequest {
   preferences: NotificationPreferences;
+}
+
+export interface UpdateSessionConfigurationRequest {
+  configuration: SessionConfiguration;
 }
 
 export interface UpdateSessionAudioPreferencesRequest {
@@ -145,6 +156,7 @@ export interface TerminalBridge {
 
 export interface CommandDeckBridge {
   getAppState: () => Promise<AppStateSnapshot>;
+  onShortcut: (listener: (event: AppShortcutEvent) => void) => () => void;
   openDirectory: (request: OpenDirectoryRequest) => Promise<CommandResult>;
   openLogDirectory: () => Promise<CommandResult>;
   selectDirectory: (request: SelectDirectoryRequest) => Promise<SelectDirectoryResult>;
@@ -152,6 +164,9 @@ export interface CommandDeckBridge {
   updateAudioPreferences: (request: UpdateAudioPreferencesRequest) => Promise<CommandResult>;
   updateNotificationPreferences: (
     request: UpdateNotificationPreferencesRequest,
+  ) => Promise<CommandResult>;
+  updateSessionConfiguration: (
+    request: UpdateSessionConfigurationRequest,
   ) => Promise<CommandResult>;
   updateSessionAudioPreferences: (
     request: UpdateSessionAudioPreferencesRequest,

@@ -5,6 +5,7 @@ import {
   audioPreferencesSchema,
   notificationPreferencesSchema,
   sessionAudioPreferencesSchema,
+  sessionConfigurationSchema,
 } from './settings';
 
 export const sessionIdSchema = z.enum(SESSION_IDS);
@@ -27,6 +28,10 @@ export const updateAuthConfigurationRequestSchema = z.object({
 
 export const updateNotificationPreferencesRequestSchema = z.object({
   preferences: notificationPreferencesSchema,
+});
+
+export const updateSessionConfigurationRequestSchema = z.object({
+  configuration: sessionConfigurationSchema,
 });
 
 export const updateSessionAudioPreferencesRequestSchema = z.object({

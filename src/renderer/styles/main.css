@@ -410,6 +410,7 @@ h1 {
 }
 
 .same-project,
+.session-role-badge,
 .bay-warning {
   display: inline-flex;
   align-items: center;
@@ -425,9 +426,15 @@ h1 {
   white-space: nowrap;
 }
 
+.session-role-badge {
+  border-color: rgba(105, 201, 216, 0.3);
+  color: var(--cyan);
+  background: rgba(105, 201, 216, 0.08);
+}
+
 .bay-meta {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 5px;
   padding: 0 8px 5px 10px;
 }
@@ -791,6 +798,20 @@ h1 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
+}
+
+.settings-inline-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.settings-inline-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .session-audio-list {

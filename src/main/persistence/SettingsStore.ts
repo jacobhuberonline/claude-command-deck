@@ -1,5 +1,9 @@
 import Store from 'electron-store';
-import { createDefaultSettings } from '../../shared/domain/defaults';
+import {
+  createDefaultSettings,
+  defaultGlobalAssistantName,
+  normalizeApplicationSettings,
+} from '../../shared/domain/defaults';
 import type {
   ApplicationSettings,
   AuthConfiguration,
@@ -76,7 +80,10 @@ export class SettingsStore {
           ? {
               ...session,
               workingDirectory: directory,
-              name: directoryLeaf(directory),
+              name:
+                session.role === 'globalAssistant'
+                  ? session.name || defaultGlobalAssistantName
+                  : directoryLeaf(directory),
               restoreOnLaunch: false,
             }
           : session,
@@ -156,12 +163,7 @@ function migrateSettings(raw: unknown): unknown {
 }
 
 function ensureSessionSet(settings: ApplicationSettings): ApplicationSettings {
-  const defaults = createDefaultSettings();
-  const byId = new Map(settings.sessions.map((session) => [session.id, session]));
-  return {
-    ...settings,
-    sessions: defaults.sessions.map((session) => byId.get(session.id) ?? session),
-  };
+  return normalizeApplicationSettings(settings);
 }
 
 function directoryLeaf(value: string) {

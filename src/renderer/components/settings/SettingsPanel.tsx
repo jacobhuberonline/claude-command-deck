@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { FolderPen, X } from 'lucide-react';
 import type {
   AppStateSnapshot,
   AuthConfiguration,
@@ -7,6 +7,7 @@ import type {
   AudioPreferences,
   NotificationPreferences,
   SessionAudioPreferences,
+  SessionConfiguration,
   SessionId,
   SettingsSection,
 } from '../../../shared/domain/types';
@@ -20,10 +21,12 @@ interface SettingsPanelProps {
   onUpdateAuthConfiguration: (auth: AuthConfiguration) => void;
   onUpdateAudioPreferences: (preferences: AudioPreferences) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
+  onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
   onUpdateSessionAudioPreferences: (
     sessionId: SessionId,
     preferences: SessionAudioPreferences,
   ) => void;
+  onSelectDirectory: (sessionId: SessionId) => void;
   onTestAudio: (event: AudioEvent) => void;
   onRerunDiagnostics: () => void;
   onOpenLogDirectory: () => void;
@@ -48,7 +51,9 @@ export function SettingsPanel({
   onUpdateAuthConfiguration,
   onUpdateAudioPreferences,
   onUpdateNotificationPreferences,
+  onUpdateSessionConfiguration,
   onUpdateSessionAudioPreferences,
+  onSelectDirectory,
   onTestAudio,
   onRerunDiagnostics,
   onOpenLogDirectory,
@@ -99,7 +104,9 @@ export function SettingsPanel({
               onUpdateAuthConfiguration={onUpdateAuthConfiguration}
               onUpdateAudioPreferences={onUpdateAudioPreferences}
               onUpdateNotificationPreferences={onUpdateNotificationPreferences}
+              onUpdateSessionConfiguration={onUpdateSessionConfiguration}
               onUpdateSessionAudioPreferences={onUpdateSessionAudioPreferences}
+              onSelectDirectory={onSelectDirectory}
               onTestAudio={onTestAudio}
               onRerunDiagnostics={onRerunDiagnostics}
               onOpenLogDirectory={onOpenLogDirectory}
@@ -117,7 +124,9 @@ function SettingsSectionContent({
   onUpdateAudioPreferences,
   onUpdateAuthConfiguration,
   onUpdateNotificationPreferences,
+  onUpdateSessionConfiguration,
   onUpdateSessionAudioPreferences,
+  onSelectDirectory,
   onTestAudio,
   onRerunDiagnostics,
   onOpenLogDirectory,
@@ -127,14 +136,26 @@ function SettingsSectionContent({
   onUpdateAudioPreferences: (preferences: AudioPreferences) => void;
   onUpdateAuthConfiguration: (auth: AuthConfiguration) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
+  onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
   onUpdateSessionAudioPreferences: (
     sessionId: SessionId,
     preferences: SessionAudioPreferences,
   ) => void;
+  onSelectDirectory: (sessionId: SessionId) => void;
   onTestAudio: (event: AudioEvent) => void;
   onRerunDiagnostics: () => void;
   onOpenLogDirectory: () => void;
 }) {
+  if (section === 'general') {
+    return (
+      <GeneralSettings
+        appState={appState}
+        onUpdateSessionConfiguration={onUpdateSessionConfiguration}
+        onSelectDirectory={onSelectDirectory}
+      />
+    );
+  }
+
   if (section === 'authentication') {
     return (
       <AuthenticationSettings auth={appState.settings.auth} onUpdate={onUpdateAuthConfiguration} />
@@ -198,6 +219,61 @@ function SettingsSectionContent({
       <Field label="Claude executable" value={appState.settings.claudeExecutable} />
       <Field label="Shell executable" value={appState.settings.shellExecutable} />
       <Field label="Restore running sessions" value="Disabled by default" />
+    </>
+  );
+}
+
+function GeneralSettings({
+  appState,
+  onUpdateSessionConfiguration,
+  onSelectDirectory,
+}: {
+  appState: AppStateSnapshot;
+  onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
+  onSelectDirectory: (sessionId: SessionId) => void;
+}) {
+  const globalAssistant =
+    appState.sessions.find((session) => session.configuration.role === 'globalAssistant') ??
+    appState.sessions[0];
+
+  if (!globalAssistant) {
+    return (
+      <>
+        <h3>Global Assistant</h3>
+        <Field label="Status" value="No session bays are available" />
+      </>
+    );
+  }
+
+  const configuration = globalAssistant.configuration;
+  const update = (patch: Partial<SessionConfiguration>) =>
+    onUpdateSessionConfiguration({ ...configuration, ...patch });
+
+  return (
+    <>
+      <h3>Global Assistant</h3>
+      <Field label="Hotkey" value="Alt+1" />
+      <TextField
+        label="Model"
+        value={configuration.model}
+        placeholder="haiku"
+        onChange={(value) => update({ model: value })}
+      />
+      <div className="settings-field settings-field-stack">
+        <span>Directory</span>
+        <div className="settings-inline-row">
+          <strong>{configuration.workingDirectory || 'No directory selected'}</strong>
+          <button
+            className="control-button"
+            type="button"
+            onClick={() => onSelectDirectory(configuration.id)}
+          >
+            <FolderPen size={15} aria-hidden="true" />
+            <span>Directory</span>
+          </button>
+        </div>
+      </div>
+      <Field label="Launch behavior" value="Session model overrides inherited Claude model args" />
     </>
   );
 }

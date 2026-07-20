@@ -3,6 +3,7 @@ import { SESSION_IDS } from '../domain/types';
 
 const sessionIdSchema = z.enum(SESSION_IDS);
 const launchModeSchema = z.enum(['new', 'continueMostRecent', 'resumeSpecific', 'custom']);
+const sessionRoleSchema = z.enum(['project', 'globalAssistant']);
 
 export const sessionAudioPreferencesSchema = z.object({
   enabled: z.boolean(),
@@ -16,9 +17,11 @@ export const sessionAudioPreferencesSchema = z.object({
 export const sessionConfigurationSchema = z.object({
   id: sessionIdSchema,
   name: z.string().min(1).max(120),
+  role: sessionRoleSchema.default('project'),
   workingDirectory: z.string().max(4096),
   executable: z.string().min(1).max(512),
   args: z.array(z.string().max(2048)).max(64),
+  model: z.string().trim().max(256).default(''),
   launchMode: launchModeSchema,
   scrollback: z.number().int().min(100).max(100000),
   restoreOnLaunch: z.boolean(),

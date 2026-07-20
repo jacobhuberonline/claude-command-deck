@@ -9,6 +9,7 @@ import {
   updateAuthConfigurationRequestSchema,
   updateAudioPreferencesRequestSchema,
   updateNotificationPreferencesRequestSchema,
+  updateSessionConfigurationRequestSchema,
   updateSessionAudioPreferencesRequestSchema,
 } from '../../shared/schemas/ipc';
 import type { SettingsStore } from '../persistence/SettingsStore';
@@ -107,6 +108,19 @@ export function registerAppStateHandlers(
       }
 
       settingsStore.updateNotificationPreferences(payload.data.preferences);
+      return { ok: true };
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.appUpdateSessionConfiguration,
+    (_event, rawPayload): CommandResult => {
+      const payload = updateSessionConfigurationRequestSchema.safeParse(rawPayload);
+      if (!payload.success) {
+        return { ok: false, error: 'Invalid session configuration.' };
+      }
+
+      settingsStore.updateSessionConfiguration(payload.data.configuration);
       return { ok: true };
     },
   );

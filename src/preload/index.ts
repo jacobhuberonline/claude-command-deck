@@ -1,6 +1,7 @@
 import electron from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc/channels';
 import type {
+  AppShortcutEvent,
   AuthExitEvent,
   AuthOutputEvent,
   CommandDeckBridge,
@@ -13,6 +14,12 @@ const bridge: CommandDeckBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.appGetState) as Promise<
       Awaited<ReturnType<CommandDeckBridge['getAppState']>>
     >,
+  onShortcut: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: AppShortcutEvent) =>
+      listener(payload);
+    ipcRenderer.on(IPC_CHANNELS.appShortcut, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.appShortcut, handler);
+  },
   openDirectory: (request) => {
     return ipcRenderer.invoke(IPC_CHANNELS.appOpenExternalDirectory, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['openDirectory']>>
@@ -40,6 +47,11 @@ const bridge: CommandDeckBridge = {
   updateNotificationPreferences: (request) => {
     return ipcRenderer.invoke(IPC_CHANNELS.appUpdateNotificationPreferences, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['updateNotificationPreferences']>>
+    >;
+  },
+  updateSessionConfiguration: (request) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateSessionConfiguration, request) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['updateSessionConfiguration']>>
     >;
   },
   updateSessionAudioPreferences: (request) => {

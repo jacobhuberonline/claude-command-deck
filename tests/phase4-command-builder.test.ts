@@ -27,6 +27,30 @@ describe('phase 4 Claude command builder', () => {
     });
   });
 
+  it('applies a session model and overrides inherited model args', () => {
+    const result = buildClaudeCommand({
+      executable: 'claude',
+      baseArgs: ['--model', 'sonnet', '--permission-mode', 'acceptEdits'],
+      model: 'haiku',
+      launchMode: 'new',
+      capabilities,
+    });
+
+    expect(result.args).toEqual(['--model', 'haiku', '--permission-mode', 'acceptEdits']);
+  });
+
+  it('removes equals-form inherited model args before applying a session model', () => {
+    const result = buildClaudeCommand({
+      executable: 'claude',
+      baseArgs: ['--model=opus', '--verbose'],
+      model: 'haiku',
+      launchMode: 'new',
+      capabilities,
+    });
+
+    expect(result.args).toEqual(['--model', 'haiku', '--verbose']);
+  });
+
   it('constructs continue-most-recent only when help reports support', () => {
     const result = buildClaudeCommand({
       executable: 'claude',

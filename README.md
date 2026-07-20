@@ -1,6 +1,6 @@
 # Claude Command Deck
 
-Local Electron desktop app for supervising four Claude Code session bays with real PTYs, reload workflows, authentication checks, conservative activity labels, and configurable sounds.
+Local Electron desktop app for supervising four Claude Code session bays with real PTYs, reload workflows, authentication checks, conservative activity labels, configurable sounds, and a low-model Global Assistant bay for generic questions.
 
 ## Commands
 
@@ -20,3 +20,5 @@ The renderer runs with `contextIsolation`, sandboxing, and no Node integration. 
 ## MVP Notes
 
 The app is Windows-first but includes macOS/Linux fallbacks for local validation. Claude continuation support is discovered from the installed CLI; the app does not invent unsupported flags. Authentication checks never report connected unless a local check command succeeds.
+
+Session 1 defaults to Global Assistant, uses the Claude Code `haiku` model alias through `--model`, and can be focused with `Alt+1` or the command-bar Global Assistant button. Its working directory is still chosen by the user through the normal directory picker.

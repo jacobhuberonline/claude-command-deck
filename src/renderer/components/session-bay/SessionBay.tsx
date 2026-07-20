@@ -67,6 +67,8 @@ export function SessionBay({
   terminalBridge,
 }: SessionBayProps) {
   const { configuration, runtime } = session;
+  const isGlobalAssistant = configuration.role === 'globalAssistant';
+  const modelLabel = configuration.model.trim() || 'Default';
   const isAttention =
     runtime.attention ||
     runtime.activityState === 'possiblePermissionPrompt' ||
@@ -110,6 +112,7 @@ export function SessionBay({
           </span>
         </button>
         <div className="bay-header-actions">
+          {isGlobalAssistant ? <span className="session-role-badge">Global</span> : null}
           {configuration.workingDirectory && runtime.sameProject ? (
             <span className="same-project">Same project</span>
           ) : null}
@@ -137,6 +140,9 @@ export function SessionBay({
           value={activityLabels[runtime.activityState]}
           attention={isAttention}
         />
+        {configuration.model.trim() || isGlobalAssistant ? (
+          <StatusPair label="Model" value={modelLabel} />
+        ) : null}
         <StatusPair
           label="Started"
           value={runtime.startedAt ? formatShortTime(runtime.startedAt) : 'Not running'}

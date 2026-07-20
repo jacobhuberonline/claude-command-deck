@@ -72,6 +72,7 @@ function createMockBridge(
 
   return {
     getAppState: vi.fn(() => Promise.resolve(snapshot)),
+    onShortcut: vi.fn(() => off),
     openDirectory: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
     openLogDirectory: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
     selectDirectory: vi.fn(() =>
@@ -84,6 +85,7 @@ function createMockBridge(
     updateAuthConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateNotificationPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
+    updateSessionConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateSessionAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     claude: {
       discover: vi.fn(() =>

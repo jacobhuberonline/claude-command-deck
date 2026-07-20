@@ -26,6 +26,8 @@ export type ActivityConfidence = 'low' | 'medium' | 'high';
 
 export type SessionLaunchMode = 'new' | 'continueMostRecent' | 'resumeSpecific' | 'custom';
 
+export type SessionRole = 'project' | 'globalAssistant';
+
 export type ManagedProcessType = 'claudeSession' | 'shellSession' | 'authCheck' | 'authRefresh';
 
 export type AuthProvider = 'aws' | 'custom' | 'disabled';
@@ -63,9 +65,11 @@ export interface SessionAudioPreferences {
 export interface SessionConfiguration {
   id: SessionId;
   name: string;
+  role: SessionRole;
   workingDirectory: string;
   executable: string;
   args: string[];
+  model: string;
   launchMode: SessionLaunchMode;
   scrollback: number;
   restoreOnLaunch: boolean;

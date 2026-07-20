@@ -50,6 +50,8 @@ The UI uses uncertain language for heuristic states.
 
 Claude discovery checks whether the configured executable resolves, captures the safe version output, and inspects help text for supported continuation options. `ClaudeCommandBuilder` selects the safest launch mode from `new`, `continueMostRecent`, `resumeSpecific`, or `custom`. If two bays share a directory and no reliable specific resume identifier is known, Reload & Continue shows an ambiguity warning and reports the strategy actually used.
 
+Session configuration can also carry a role and model alias. The first default bay is the Global Assistant, focused with `Alt+1` or the command-bar Global Assistant button, and launches Claude Code with `--model haiku` unless the user changes that model in Settings.
+
 ## Authentication Monitoring
 
 Authentication supports disabled, AWS preset, and custom command modes. Checks run with timeouts and never overlap. AWS structured output parsing keeps only safe identity metadata. Refresh runs in a dedicated interactive PTY displayed in an authentication console. Raw authentication output is never persisted by default.
@@ -60,7 +62,7 @@ Renderer-side audio listens for semantic events and decides whether to play loca
 
 ## Persistence Boundaries
 
-Electron Store persists non-secret metadata only: session names, directories, preferred executable and arguments, launch preferences, layout, authentication command configuration, audio preferences, quiet hours, and diagnostics preferences. It does not persist terminal transcripts, terminal input, raw authentication output, environment dumps, access keys, session tokens, device codes, cookies, or bearer tokens.
+Electron Store persists non-secret metadata only: session names, roles, model aliases, directories, preferred executable and arguments, launch preferences, layout, authentication command configuration, audio preferences, quiet hours, and diagnostics preferences. It does not persist terminal transcripts, terminal input, raw authentication output, environment dumps, access keys, session tokens, device codes, cookies, or bearer tokens.
 
 ## Logging And Redaction
 

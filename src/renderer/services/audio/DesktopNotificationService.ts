@@ -171,14 +171,14 @@ function notificationCopy(
   if (event === 'reload_all.completed') {
     return {
       title: 'Reload All completed',
-      body: 'All configured sessions finished the reload sequence.',
+      body: 'All configured project sessions finished the reload sequence.',
     };
   }
 
   if (event === 'reload_all.partially_failed') {
     return {
       title: 'Reload All completed with failures',
-      body: 'One or more sessions failed during the reload sequence.',
+      body: 'One or more project sessions failed during the reload sequence.',
     };
   }
 

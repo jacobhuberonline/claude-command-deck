@@ -2,7 +2,6 @@ import type {
   AppStateSnapshot,
   ApplicationSettings,
   AuthConfiguration,
-  AuthStateSnapshot,
   AudioPreferences,
   NotificationPreferences,
   QuietHoursConfiguration,
@@ -13,6 +12,10 @@ import type {
   SessionSnapshot,
 } from './types';
 import { SESSION_IDS } from './types';
+
+export const defaultGlobalAssistantSessionId: SessionId = 'session-1';
+export const defaultGlobalAssistantName = 'Global Assistant';
+export const defaultGlobalAssistantModel = 'haiku';
 
 const defaultSessionAudio: SessionAudioPreferences = {
   enabled: true,
@@ -74,13 +77,16 @@ export const defaultAuthConfiguration: AuthConfiguration = {
 
 export function createDefaultSessionConfiguration(id: SessionId): SessionConfiguration {
   const index = SESSION_IDS.indexOf(id) + 1;
+  const globalAssistant = id === defaultGlobalAssistantSessionId;
 
   return {
     id,
-    name: `Session ${index}`,
+    name: globalAssistant ? defaultGlobalAssistantName : `Session ${index}`,
+    role: globalAssistant ? 'globalAssistant' : 'project',
     workingDirectory: '',
     executable: 'claude',
     args: [],
+    model: globalAssistant ? defaultGlobalAssistantModel : '',
     launchMode: 'continueMostRecent',
     scrollback: 5000,
     restoreOnLaunch: false,
@@ -93,7 +99,7 @@ export function createDefaultRuntimeState(processState: SessionRuntimeState['pro
     processState,
     activityState: 'unknown',
     activityConfidence: 'low',
-    statusMessage: 'Ready for configuration',
+    statusMessage: 'Select a project directory to begin.',
     sameProject: false,
     attention: false,
   } satisfies SessionRuntimeState;
@@ -117,68 +123,13 @@ export function createDefaultSettings(): ApplicationSettings {
   };
 }
 
-export function createPhaseOneState(
-  appVersion: string,
-  options: { workspaceRoot?: string } = {},
-): AppStateSnapshot {
+export function createPhaseOneState(appVersion: string): AppStateSnapshot {
   const settings = createDefaultSettings();
   const now = new Date().toISOString();
-  const configuredDirectory = options.workspaceRoot ?? 'C:\\Code\\api-skill-test';
-  const configuredSessions = settings.sessions.map((configuration, index): SessionSnapshot => {
-    const runtimeByIndex: SessionRuntimeState[] = [
-      {
-        ...createDefaultRuntimeState('empty'),
-        statusMessage: 'Select a project directory to begin.',
-      },
-      {
-        ...createDefaultRuntimeState('stopped'),
-        activityState: 'idle',
-        statusMessage: 'Configured and stopped.',
-      },
-      {
-        ...createDefaultRuntimeState('running'),
-        activityState: 'possiblePermissionPrompt',
-        activityConfidence: 'medium',
-        startedAt: now,
-        lastOutputAt: now,
-        statusMessage: 'Possible permission prompt.',
-        sameProject: true,
-        attention: true,
-      },
-      {
-        ...createDefaultRuntimeState('crashed'),
-        activityState: 'authenticationMayBeRequired',
-        activityConfidence: 'medium',
-        startedAt: now,
-        lastOutputAt: now,
-        exitCode: 1,
-        statusMessage: 'Process exited unexpectedly.',
-        sameProject: true,
-        attention: true,
-      },
-    ];
-
-    const workingDirectory = index === 0 ? '' : configuredDirectory;
-
-    return {
-      configuration: {
-        ...configuration,
-        name: ['Unassigned Bay', 'Provider API', 'API Skill Test', 'API Skill Test Lab'][index]!,
-        workingDirectory,
-      },
-      runtime: runtimeByIndex[index]!,
-    };
-  });
+  const state = createAppStateFromSettings(appVersion, settings);
 
   return {
-    sessions: configuredSessions,
-    auth: {
-      provider: 'aws',
-      status: 'notConfigured',
-      label: 'AWS not configured',
-      details: 'Configure a credential check command in Settings.',
-    } satisfies AuthStateSnapshot,
-    settings,
+    ...state,
     diagnostics: [
       {
         id: 'secure-electron',
@@ -187,15 +138,8 @@ export function createPhaseOneState(
         detail: 'contextIsolation enabled, nodeIntegration disabled, remote module unused.',
         checkedAt: now,
       },
-      {
-        id: 'terminal-adapter',
-        label: 'Terminal adapter',
-        status: 'warn',
-        detail: 'Visual placeholder only until Phase 2 PTY integration.',
-        checkedAt: now,
-      },
+      ...state.diagnostics,
     ],
-    appVersion,
   };
 }
 
@@ -204,9 +148,10 @@ export function createAppStateFromSettings(
   settings: ApplicationSettings,
 ): AppStateSnapshot {
   const now = new Date().toISOString();
+  const normalizedSettings = normalizeApplicationSettings(settings);
 
   return {
-    sessions: settings.sessions.map((configuration): SessionSnapshot => {
+    sessions: normalizedSettings.sessions.map((configuration): SessionSnapshot => {
       const configured = configuration.workingDirectory.trim().length > 0;
       return {
         configuration: {
@@ -223,31 +168,95 @@ export function createAppStateFromSettings(
       };
     }),
     auth: {
-      provider: settings.auth.provider,
-      status: settings.auth.provider === 'disabled' ? 'notConfigured' : 'notConfigured',
+      provider: normalizedSettings.auth.provider,
+      status: normalizedSettings.auth.provider === 'disabled' ? 'notConfigured' : 'notConfigured',
       label:
-        settings.auth.provider === 'disabled'
+        normalizedSettings.auth.provider === 'disabled'
           ? 'Authentication disabled'
-          : settings.auth.checkExecutable.trim()
+          : normalizedSettings.auth.checkExecutable.trim()
             ? 'Ready to check'
             : 'AWS not configured',
       details:
-        settings.auth.provider === 'disabled'
+        normalizedSettings.auth.provider === 'disabled'
           ? 'Authentication monitoring is disabled.'
-          : settings.auth.checkExecutable.trim()
+          : normalizedSettings.auth.checkExecutable.trim()
             ? 'Click Check Connection to validate credentials.'
             : 'Configure a credential check command in Settings.',
     },
-    settings,
+    settings: normalizedSettings,
     diagnostics: [
       {
         id: 'settings-schema',
         label: 'Settings schema',
         status: 'pass',
-        detail: `Loaded schema v${settings.schemaVersion}; sessions restore stopped by default.`,
+        detail: `Loaded schema v${normalizedSettings.schemaVersion}; sessions restore stopped by default.`,
         checkedAt: now,
       },
     ],
     appVersion,
+  };
+}
+
+export function normalizeApplicationSettings(settings: ApplicationSettings): ApplicationSettings {
+  const defaults = createDefaultSettings();
+  const byId = new Map(settings.sessions.map((session) => [session.id, session]));
+  let sessions = defaults.sessions.map((defaultSession) => {
+    const configured = byId.get(defaultSession.id);
+    return configured
+      ? {
+          ...defaultSession,
+          ...configured,
+          audio: {
+            ...defaultSession.audio,
+            ...configured.audio,
+          },
+        }
+      : defaultSession;
+  });
+
+  if (!sessions.some((session) => session.role === 'globalAssistant')) {
+    sessions = sessions.map((session) =>
+      session.id === defaultGlobalAssistantSessionId
+        ? {
+            ...session,
+            name: defaultGlobalAssistantName,
+            role: 'globalAssistant',
+            model: session.model.trim() || defaultGlobalAssistantModel,
+          }
+        : session,
+    );
+  }
+
+  return {
+    ...defaults,
+    ...settings,
+    sessions: sessions.map((session) =>
+      session.role === 'globalAssistant'
+        ? {
+            ...session,
+            name: session.name.trim() || defaultGlobalAssistantName,
+            model: session.model.trim() || defaultGlobalAssistantModel,
+          }
+        : {
+            ...session,
+            model: session.model.trim(),
+          },
+    ),
+    audio: {
+      ...defaults.audio,
+      ...settings.audio,
+      quietHours: {
+        ...defaults.audio.quietHours,
+        ...settings.audio.quietHours,
+      },
+    },
+    auth: {
+      ...defaults.auth,
+      ...settings.auth,
+    },
+    notifications: {
+      ...defaults.notifications,
+      ...settings.notifications,
+    },
   };
 }

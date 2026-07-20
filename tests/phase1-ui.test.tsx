@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import { App } from '../src/renderer/app/App';
 import { createPhaseOneState } from '../src/shared/domain/defaults';
@@ -43,12 +43,48 @@ describe('phase 1 visual shell', () => {
     terminal.append(terminalInput);
     document.body.append(terminal);
 
-    fireEvent.keyDown(terminalInput, { altKey: true, key: '2' });
+    fireEvent.keyDown(terminalInput, { altKey: true, key: 'Unidentified', code: 'Digit2' });
 
     const status = screen.getByRole('contentinfo', { name: 'Application status' });
-    expect(within(status).getByText('Provider API')).toBeInTheDocument();
+    expect(within(status).getByText('Session 2')).toBeInTheDocument();
+
+    fireEvent.keyDown(terminalInput, { altKey: true, key: 'Unidentified', code: 'Digit2' });
+    expect(within(status).getByText('Session 2')).toBeInTheDocument();
+
+    fireEvent.keyDown(terminalInput, { altKey: true, key: 'Unidentified', code: 'Digit1' });
+    expect(within(status).getByText('Global Assistant')).toBeInTheDocument();
 
     terminal.remove();
+  });
+
+  it('focuses the global assistant from the Electron shortcut event', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    const bridge = createMockBridge(snapshot);
+    window.commandDeck = bridge;
+
+    render(<App />);
+
+    const status = await screen.findByRole('contentinfo', { name: 'Application status' });
+    expect(within(status).getByText('Global Assistant')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { altKey: true, key: '2', code: 'Digit2' });
+    expect(within(status).getByText('Session 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Global Assistant' }));
+    expect(within(status).getByText('Global Assistant')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { altKey: true, key: '2', code: 'Digit2' });
+    expect(within(status).getByText('Session 2')).toBeInTheDocument();
+
+    const shortcutListener = vi.mocked(bridge.onShortcut).mock.calls[0]?.[0];
+    expect(shortcutListener).toBeDefined();
+
+    act(() => {
+      shortcutListener?.({ shortcut: 'focusGlobalAssistant' });
+    });
+
+    expect(within(status).getByText('Global Assistant')).toBeInTheDocument();
   });
 
   it('opens the directory picker from the session title', async () => {
@@ -70,7 +106,7 @@ describe('phase 1 visual shell', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Change directory for Provider API',
+        name: 'Change directory for Session 2',
       }),
     );
 
@@ -86,11 +122,12 @@ describe('phase 1 visual shell', () => {
     render(<App />);
 
     const article = await screen.findByRole('article', {
-      name: /API Skill Test session bay/i,
+      name: /Global Assistant session bay/i,
     });
     expect(
-      within(article).getByRole('region', { name: 'API Skill Test terminal' }),
+      within(article).getByRole('region', { name: 'Global Assistant terminal' }),
     ).toBeInTheDocument();
+    expect(within(article).getByText('haiku')).toBeInTheDocument();
     expect(within(article).getByText('Terminal test adapter')).toBeInTheDocument();
   });
 
@@ -102,24 +139,52 @@ describe('phase 1 visual shell', () => {
     render(<App />);
 
     const article = await screen.findByRole('article', {
-      name: /API Skill Test session bay/i,
+      name: /Global Assistant session bay/i,
     });
-    expect(within(article).queryByRole('textbox', { name: /Prompt API Skill Test/i })).toBeNull();
+    expect(within(article).queryByRole('textbox', { name: /Prompt Global Assistant/i })).toBeNull();
     expect(within(article).queryByRole('button', { name: /Send prompt/i })).toBeNull();
     expect(within(article).queryByRole('button', { name: 'Console' })).toBeNull();
     expect(within(article).queryByRole('button', { name: 'Paste clipboard' })).toBeNull();
   });
 
+  it('launches the global assistant with the configured low model', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    snapshot.sessions[0]!.configuration.workingDirectory = '/Users/example/global';
+    const startClaude = vi.fn(() => Promise.resolve({ ok: true as const }));
+    window.commandDeck = createMockBridge(snapshot, {}, { startClaude });
+
+    render(<App />);
+
+    const article = await screen.findByRole('article', {
+      name: /Global Assistant session bay/i,
+    });
+
+    fireEvent.click(within(article).getByRole('button', { name: 'New' }));
+
+    await waitFor(() =>
+      expect(startClaude).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        workingDirectory: '/Users/example/global',
+        executable: 'claude',
+        args: ['--model', 'haiku'],
+        cols: 80,
+        rows: 16,
+      }),
+    );
+  });
+
   it('starts the shell from the terminal command controls', async () => {
     const snapshot = createPhaseOneState('test');
     snapshot.settings.auth.startupChecksEnabled = false;
+    snapshot.sessions[1]!.configuration.workingDirectory = '/Users/example/project';
     const startShell = vi.fn(() => Promise.resolve({ ok: true as const }));
     window.commandDeck = createMockBridge(snapshot, {}, { startShell });
 
     render(<App />);
 
     const article = await screen.findByRole('article', {
-      name: /Provider API session bay/i,
+      name: /Session 2 session bay/i,
     });
     expect(within(article).getByText('Terminal test adapter')).toBeInTheDocument();
 
@@ -128,7 +193,7 @@ describe('phase 1 visual shell', () => {
     await waitFor(() =>
       expect(startShell).toHaveBeenCalledWith({
         sessionId: 'session-2',
-        workingDirectory: 'C:\\Code\\api-skill-test',
+        workingDirectory: '/Users/example/project',
         cols: 80,
         rows: 16,
       }),
@@ -193,6 +258,7 @@ function createMockBridge(
 
   return {
     getAppState: vi.fn(() => Promise.resolve(snapshot)),
+    onShortcut: vi.fn(() => off),
     openDirectory: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
     openLogDirectory: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
     selectDirectory: vi.fn(() =>
@@ -205,6 +271,7 @@ function createMockBridge(
     updateAuthConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateNotificationPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
+    updateSessionConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateSessionAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     claude: {
       discover: vi.fn(() =>

@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Gauge,
   Loader2,
+  MessageCircle,
   RefreshCcw,
   RotateCcw,
   Settings,
@@ -26,6 +27,7 @@ interface CommandBarProps {
   audio: AudioPreferences;
   onOpenSettings: () => void;
   onToggleFocusMode: () => void;
+  onFocusGlobalAssistant: () => void;
   onReloadAll: () => void;
   onAuthAction: () => void;
   onToggleAudio: () => void;
@@ -40,6 +42,7 @@ export function CommandBar({
   audio,
   onOpenSettings,
   onToggleFocusMode,
+  onFocusGlobalAssistant,
   onReloadAll,
   onAuthAction,
   onToggleAudio,
@@ -88,8 +91,8 @@ export function CommandBar({
         <button
           className="control-button primary"
           type="button"
-          title="Reload All sessions"
-          aria-label="Reload All sessions"
+          title="Reload all project sessions"
+          aria-label="Reload all project sessions"
           onClick={onReloadAll}
         >
           <RotateCcw size={16} aria-hidden="true" />
@@ -110,6 +113,15 @@ export function CommandBar({
             DND
           </span>
         ) : null}
+        <button
+          className="icon-button"
+          type="button"
+          title="Open Global Assistant (Alt+1)"
+          aria-label="Open Global Assistant"
+          onClick={onFocusGlobalAssistant}
+        >
+          <MessageCircle size={17} aria-hidden="true" />
+        </button>
         <button
           className="icon-button"
           type="button"

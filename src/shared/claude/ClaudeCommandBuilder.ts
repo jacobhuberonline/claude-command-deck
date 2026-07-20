@@ -3,6 +3,7 @@ import type { ClaudeContinuationCapabilities, SessionLaunchMode } from '../domai
 export interface ClaudeCommandBuildInput {
   executable: string;
   baseArgs: string[];
+  model?: string;
   launchMode: SessionLaunchMode;
   capabilities: ClaudeContinuationCapabilities;
   knownSessionIdentifier?: string;
@@ -16,7 +17,7 @@ export interface ClaudeCommandBuildResult {
 }
 
 export function buildClaudeCommand(input: ClaudeCommandBuildInput): ClaudeCommandBuildResult {
-  const baseArgs = [...input.baseArgs];
+  const baseArgs = applyModelOverride(input.baseArgs, input.model);
 
   if (input.launchMode === 'custom') {
     return {
@@ -73,4 +74,32 @@ export function buildClaudeCommand(input: ClaudeCommandBuildInput): ClaudeComman
     strategy: 'freshFallback',
     warnings: ['Continuation is unsupported by the discovered Claude CLI; using a fresh launch.'],
   };
+}
+
+function applyModelOverride(baseArgs: string[], model: string | undefined) {
+  const trimmed = model?.trim();
+  if (!trimmed) {
+    return [...baseArgs];
+  }
+
+  return ['--model', trimmed, ...stripModelArgs(baseArgs)];
+}
+
+function stripModelArgs(args: string[]) {
+  const stripped: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
+    if (arg === '--model') {
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--model=')) {
+      continue;
+    }
+
+    stripped.push(arg);
+  }
+
+  return stripped;
 }

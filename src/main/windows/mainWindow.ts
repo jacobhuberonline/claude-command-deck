@@ -1,6 +1,8 @@
 import { join } from 'node:path';
 import { BrowserWindow, screen, shell } from 'electron';
 import { is } from '@electron-toolkit/utils';
+import { IPC_CHANNELS } from '../../shared/ipc/channels';
+import type { AppShortcut } from '../../shared/ipc/contracts';
 import { defaultWindowBounds } from './WindowState';
 import { WindowStateStore } from './WindowStateStore';
 
@@ -41,6 +43,7 @@ export function createMainWindow(): BrowserWindow {
   });
 
   registerWindowStatePersistence(mainWindow, windowStateStore);
+  registerApplicationShortcuts(mainWindow);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
@@ -89,4 +92,39 @@ function registerWindowStatePersistence(
 
     windowStateStore.save(window);
   });
+}
+
+function registerApplicationShortcuts(window: BrowserWindow): void {
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') {
+      return;
+    }
+
+    if (isGlobalAssistantShortcut(input)) {
+      event.preventDefault();
+      sendShortcut(window, 'focusGlobalAssistant');
+    }
+  });
+}
+
+function isGlobalAssistantShortcut(input: Electron.Input): boolean {
+  if (!input.alt || input.meta) {
+    return false;
+  }
+
+  if (!input.control && matchesKey(input, '0', 'Digit0')) {
+    return true;
+  }
+
+  return matchesKey(input, 'g', 'KeyG');
+}
+
+function matchesKey(input: Electron.Input, key: string, code: string): boolean {
+  return input.key.toLowerCase() === key || input.code === code;
+}
+
+function sendShortcut(window: BrowserWindow, shortcut: AppShortcut): void {
+  if (!window.isDestroyed()) {
+    window.webContents.send(IPC_CHANNELS.appShortcut, { shortcut });
+  }
 }
