@@ -9,6 +9,7 @@ import type {
   AppStateSnapshot,
   AuthCheckResult,
   AuthConfiguration,
+  AuthProvider,
   AuthStatus,
   AudioEvent,
   AudioPreferences,
@@ -21,7 +22,7 @@ import type {
   SessionLaunchMode,
   SettingsSection,
 } from '../../shared/domain/types';
-import type { CommandDeckBridge } from '../../shared/ipc/contracts';
+import type { CommandDeckBridge, CommandResult } from '../../shared/ipc/contracts';
 import { AuthConsole } from '../components/auth-console/AuthConsole';
 import { CommandBar } from '../components/command-bar/CommandBar';
 import { SessionGrid } from '../components/session-bay/SessionGrid';
@@ -138,6 +139,7 @@ const soundAssetNames = [
 const usageTrackerEnabled = false;
 const usageStorageKey = 'claude-command-deck:last-usage';
 const minimumAuthCheckIntervalSeconds = 30;
+const authFailureConfirmationDelayMs = 350;
 const maxTerminalReplayBytes = 1024 * 1024;
 
 interface PreparedClaudeLaunch {
@@ -185,7 +187,6 @@ export function App() {
   const awaitingClaudeReadyRef = useRef(new Set<SessionId>());
   const sessionOperationRef = useRef(new Set<SessionId>());
   const addSessionInFlightRef = useRef(false);
-  const addSessionRef = useRef<() => void>(() => undefined);
   const [, setClaudeDiscovery] = useState<ClaudeDiscoverySnapshot>(() => ({
     executable: 'claude',
     resolvedPath: null,
@@ -207,11 +208,10 @@ export function App() {
   const appStateRef = useRef(appState);
   const focusedSessionIdRef = useRef(focusedSessionId);
   const startupAuthAttemptedRef = useRef(false);
+  const authCheckGenerationRef = useRef(0);
+  const authCheckInFlightRef = useRef<Promise<AuthCheckResult> | null>(null);
   const authRefreshStartInFlightRef = useRef(false);
   const appStateLoadedRef = useRef(false);
-  addSessionRef.current = () => {
-    void addSession();
-  };
 
   useEffect(() => {
     appStateRef.current = appState;
@@ -343,6 +343,83 @@ export function App() {
     },
     [],
   );
+
+  const addPreferenceDiagnostic = useCallback((id: string, label: string, error: string) => {
+    setAppState((current) => ({
+      ...current,
+      diagnostics: [
+        ...current.diagnostics.filter((diagnostic) => diagnostic.id !== id),
+        {
+          id,
+          label,
+          status: 'warn',
+          detail: error,
+          checkedAt: new Date().toISOString(),
+        },
+      ],
+    }));
+  }, []);
+
+  const focusAdjacentSession = useCallback((direction: 1 | -1) => {
+    const sessions = appStateRef.current.sessions;
+    if (sessions.length === 0) {
+      return;
+    }
+
+    const currentIndex = sessions.findIndex(
+      (session) => session.configuration.id === focusedSessionIdRef.current,
+    );
+    const nextIndex = (Math.max(0, currentIndex) + direction + sessions.length) % sessions.length;
+    const nextSession = sessions[nextIndex];
+    if (nextSession) {
+      setFocusedSessionId(nextSession.configuration.id);
+    }
+  }, []);
+
+  const focusSessionSearch = useCallback(() => {
+    setFocusMode(false);
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLInputElement>('.session-search input')?.focus();
+    });
+  }, []);
+
+  const addSession = useCallback(async () => {
+    if (addSessionInFlightRef.current) {
+      return;
+    }
+
+    addSessionInFlightRef.current = true;
+    try {
+      const result = await bridge.addSession();
+      if (!result.ok) {
+        if (!result.cancelled) {
+          addPreferenceDiagnostic('add-session', 'Add session', result.error);
+        }
+        return;
+      }
+
+      const runtime = {
+        ...createDefaultRuntimeState('stopped'),
+        activityState: 'idle' as const,
+        statusMessage: 'Configured and stopped.',
+      };
+      setAppState((current) =>
+        markSameProjects({
+          ...current,
+          settings: {
+            ...current.settings,
+            sessions: [...current.settings.sessions, result.configuration],
+            focusedSessionId: result.configuration.id,
+          },
+          sessions: [...current.sessions, { configuration: result.configuration, runtime }],
+        }),
+      );
+      setFocusedSessionId(result.configuration.id);
+      setFocusMode(false);
+    } finally {
+      addSessionInFlightRef.current = false;
+    }
+  }, [addPreferenceDiagnostic, bridge]);
 
   useEffect(() => {
     let cancelled = false;
@@ -507,12 +584,12 @@ export function App() {
     () =>
       bridge.onShortcut((event) => {
         if (event.shortcut === 'addSession') {
-          addSessionRef.current();
+          void addSession();
         } else {
           focusSessionSearch();
         }
       }),
-    [bridge],
+    [addSession, bridge, focusSessionSearch],
   );
 
   useEffect(() => {
@@ -597,7 +674,7 @@ export function App() {
 
       if (isAltShortcut(event, 'n', 'KeyN')) {
         event.preventDefault();
-        addSessionRef.current();
+        void addSession();
       }
 
       if (
@@ -636,7 +713,14 @@ export function App() {
 
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [appState.sessions, authConsoleOpen, settingsSection]);
+  }, [
+    addSession,
+    appState.sessions,
+    authConsoleOpen,
+    focusAdjacentSession,
+    focusSessionSearch,
+    settingsSection,
+  ]);
 
   const focusedSession = useMemo(
     () =>
@@ -644,67 +728,6 @@ export function App() {
       appState.sessions[0],
     [appState.sessions, focusedSessionId],
   );
-
-  function focusAdjacentSession(direction: 1 | -1) {
-    const sessions = appStateRef.current.sessions;
-    if (sessions.length === 0) {
-      return;
-    }
-
-    const currentIndex = sessions.findIndex(
-      (session) => session.configuration.id === focusedSessionIdRef.current,
-    );
-    const nextIndex = (Math.max(0, currentIndex) + direction + sessions.length) % sessions.length;
-    const nextSession = sessions[nextIndex];
-    if (nextSession) {
-      setFocusedSessionId(nextSession.configuration.id);
-    }
-  }
-
-  function focusSessionSearch() {
-    setFocusMode(false);
-    window.requestAnimationFrame(() => {
-      document.querySelector<HTMLInputElement>('.session-search input')?.focus();
-    });
-  }
-
-  async function addSession() {
-    if (addSessionInFlightRef.current) {
-      return;
-    }
-
-    addSessionInFlightRef.current = true;
-    try {
-      const result = await bridge.addSession();
-      if (!result.ok) {
-        if (!result.cancelled) {
-          addPreferenceDiagnostic('add-session', 'Add session', result.error);
-        }
-        return;
-      }
-
-      const runtime = {
-        ...createDefaultRuntimeState('stopped'),
-        activityState: 'idle' as const,
-        statusMessage: 'Configured and stopped.',
-      };
-      setAppState((current) =>
-        markSameProjects({
-          ...current,
-          settings: {
-            ...current.settings,
-            sessions: [...current.settings.sessions, result.configuration],
-            focusedSessionId: result.configuration.id,
-          },
-          sessions: [...current.sessions, { configuration: result.configuration, runtime }],
-        }),
-      );
-      setFocusedSessionId(result.configuration.id);
-      setFocusMode(false);
-    } finally {
-      addSessionInFlightRef.current = false;
-    }
-  }
 
   async function removeSession(sessionId: SessionId) {
     const session = appStateRef.current.sessions.find(
@@ -773,6 +796,8 @@ export function App() {
   }
 
   async function updateAuthConfiguration(auth: AuthConfiguration) {
+    authCheckGenerationRef.current += 1;
+    authCheckInFlightRef.current = null;
     const authSummary = createAuthStateFromConfiguration(auth);
 
     setAppState((current) => ({
@@ -949,22 +974,6 @@ export function App() {
           (diagnostic) => !checks.some((check) => check.id === diagnostic.id),
         ),
         ...checks,
-      ],
-    }));
-  }
-
-  function addPreferenceDiagnostic(id: string, label: string, error: string) {
-    setAppState((current) => ({
-      ...current,
-      diagnostics: [
-        ...current.diagnostics.filter((diagnostic) => diagnostic.id !== id),
-        {
-          id,
-          label,
-          status: 'warn',
-          detail: error,
-          checkedAt: new Date().toISOString(),
-        },
       ],
     }));
   }
@@ -1439,46 +1448,102 @@ export function App() {
     }
   }
 
-  const checkConnection = useCallback(async (): Promise<AuthCheckResult> => {
-    const previousStatus = appStateRef.current.auth.status;
-    setAppState((current) => ({
-      ...current,
-      auth: {
-        ...current.auth,
-        status: 'checking',
-        label: 'Checking',
-        details: 'Running credential check command.',
-        nextScheduledCheckAt: undefined,
-      },
-    }));
+  const checkConnection = useCallback(
+    (options: { forceFresh?: boolean } = {}): Promise<AuthCheckResult> => {
+      if (!options.forceFresh && authCheckInFlightRef.current) {
+        return authCheckInFlightRef.current;
+      }
 
-    const result = await bridge.auth.check();
-    setAppState((current) => ({
-      ...current,
-      auth: {
-        ...current.auth,
-        status: result.status,
-        label: authLabel(result.status),
-        details: result.error ?? formatSafeIdentity(result.safeIdentity) ?? 'Credentials verified.',
-        safeIdentity: result.safeIdentity,
-        lastCheckedAt: result.checkedAt,
-        lastSuccessfulCheckAt:
-          result.status === 'connected' ? result.checkedAt : current.auth.lastSuccessfulCheckAt,
-        nextScheduledCheckAt: getNextAuthCheckAt(result.checkedAt, current.settings.auth),
-      },
-    }));
+      const generation = authCheckGenerationRef.current + 1;
+      authCheckGenerationRef.current = generation;
+      const operation = (async () => {
+        const previousAuth = appStateRef.current.auth;
+        const provider = appStateRef.current.settings.auth.provider;
+        const hadPriorSuccess = previousAuth.lastSuccessfulCheckAt !== undefined;
+        setAppState((current) => ({
+          ...current,
+          auth: {
+            ...current.auth,
+            status: 'checking',
+            label: authLabel('checking', provider),
+            details: authCheckingDetails(provider),
+            nextScheduledCheckAt: undefined,
+          },
+        }));
 
-    const event = authTransitionEvent(previousStatus, result.status);
-    if (event) {
-      emitSemanticEvents([event]);
-    }
+        let result = await runAuthCheck(bridge);
+        if (generation !== authCheckGenerationRef.current) {
+          return supersededAuthCheckResult(result);
+        }
 
-    return result;
-  }, [bridge, emitSemanticEvents]);
+        if (shouldConfirmAuthCheckFailure(result.status, provider, hadPriorSuccess)) {
+          setAppState((current) => ({
+            ...current,
+            auth: {
+              ...current.auth,
+              status: 'checking',
+              label: authLabel('checking', provider),
+              details: `${authProviderName(provider)} check failed once; confirming before changing the last verified status.`,
+            },
+          }));
+          await delay(authFailureConfirmationDelayMs);
+          if (generation !== authCheckGenerationRef.current) {
+            return supersededAuthCheckResult(result);
+          }
+          result = await runAuthCheck(bridge);
+          if (generation !== authCheckGenerationRef.current) {
+            return supersededAuthCheckResult(result);
+          }
+        }
 
-  const startAuthRefresh = useCallback(async () => {
+        setAppState((current) => ({
+          ...current,
+          auth: {
+            ...current.auth,
+            status: result.status,
+            label: authLabel(result.status, provider),
+            details: authCheckDetails(
+              result,
+              provider,
+              result.status === 'connected' ? result.checkedAt : current.auth.lastSuccessfulCheckAt,
+            ),
+            safeIdentity: result.safeIdentity,
+            lastCheckedAt: result.checkedAt,
+            lastSuccessfulCheckAt:
+              result.status === 'connected' ? result.checkedAt : current.auth.lastSuccessfulCheckAt,
+            nextScheduledCheckAt: getNextAuthCheckAt(result.checkedAt, current.settings.auth),
+          },
+        }));
+
+        const event = authTransitionEvent(previousAuth.status, result.status);
+        if (event) {
+          emitSemanticEvents([event]);
+        }
+
+        return result;
+      })();
+
+      authCheckInFlightRef.current = operation;
+      void operation.then(
+        () => {
+          if (authCheckInFlightRef.current === operation) {
+            authCheckInFlightRef.current = null;
+          }
+        },
+        () => {
+          if (authCheckInFlightRef.current === operation) {
+            authCheckInFlightRef.current = null;
+          }
+        },
+      );
+      return operation;
+    },
+    [bridge, emitSemanticEvents],
+  );
+
+  const startAuthRefresh = useCallback(async (): Promise<CommandResult> => {
     if (authRefreshStartInFlightRef.current || appStateRef.current.auth.status === 'refreshing') {
-      return;
+      return { ok: false, error: 'Credential login is already running.' };
     }
 
     authRefreshStartInFlightRef.current = true;
@@ -1494,21 +1559,25 @@ export function App() {
           auth: {
             ...current.auth,
             status: 'disconnected',
-            label: 'Login unavailable',
-            details: 'Add a credential login command in Settings.',
+            label: `${authProviderName(auth.provider)} login unavailable`,
+            details: `Add a provider login command in Settings. ${authScopeDisclaimer(auth.provider)}`,
           },
         }));
-        return;
+        return { ok: false, error: 'Credential login command is not configured.' };
       }
 
+      // A check that began before this login cannot describe the credentials after it. Supersede
+      // its renderer result; the login exit handler will request a fresh authoritative check.
+      authCheckGenerationRef.current += 1;
+      authCheckInFlightRef.current = null;
       setAuthConsoleOpen(true);
       setAppState((current) => ({
         ...current,
         auth: {
           ...current.auth,
           status: 'refreshing',
-          label: 'Logging in',
-          details: 'Starting credential login.',
+          label: authLabel('refreshing', auth.provider),
+          details: `Starting the configured provider login. ${authScopeDisclaimer(auth.provider)}`,
         },
       }));
 
@@ -1519,24 +1588,27 @@ export function App() {
           auth: {
             ...current.auth,
             status: 'error',
-            label: 'Authentication error',
-            details: result.error,
+            label: authLabel('error', auth.provider),
+            details: `${result.error} ${authScopeDisclaimer(auth.provider)}`,
           },
         }));
-        return;
+        return result;
       }
 
       refreshStarted = true;
+      return result;
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to start credential login.';
       setAppState((current) => ({
         ...current,
         auth: {
           ...current.auth,
           status: 'error',
-          label: 'Authentication error',
-          details: error instanceof Error ? error.message : 'Unable to start credential login.',
+          label: authLabel('error', auth.provider),
+          details: `${message} ${authScopeDisclaimer(auth.provider)}`,
         },
       }));
+      return { ok: false, error: message };
     } finally {
       if (!refreshStarted) {
         authRefreshStartInFlightRef.current = false;
@@ -1667,23 +1739,11 @@ export function App() {
   }, [appState.settings.auth, checkConnection, startConfiguredAuthRefreshAfterCheck]);
 
   useEffect(() => {
-    return bridge.auth.onExit((event) => {
+    return bridge.auth.onExit(() => {
       authRefreshStartInFlightRef.current = false;
-
-      if (event.exitCode === 0) {
-        void checkConnection();
-        return;
-      }
-
-      setAppState((current) => ({
-        ...current,
-        auth: {
-          ...current.auth,
-          status: 'disconnected',
-          label: 'Disconnected',
-          details: `Refresh exited with code ${event.exitCode ?? 'unknown'}.`,
-        },
-      }));
+      // A login process exit does not establish credential state. Always run the configured
+      // authoritative check, including after cancellation or a non-zero exit.
+      void checkConnection({ forceFresh: true });
     });
   }, [bridge, checkConnection]);
 
@@ -1808,6 +1868,7 @@ export function App() {
       <AuthConsole
         open={authConsoleOpen}
         authBridge={bridge.auth}
+        onStartLogin={startAuthRefresh}
         onClose={() => setAuthConsoleOpen(false)}
       />
     </div>
@@ -1943,10 +2004,7 @@ function authTransitionEvent(previous: AuthStatus, next: AuthStatus): AudioEvent
     return 'auth.connected';
   }
 
-  if (
-    previous === 'connected' &&
-    (next === 'disconnected' || next === 'error' || next === 'expiringSoon')
-  ) {
+  if (previous === 'connected' && next === 'disconnected') {
     return 'auth.disconnected';
   }
 
@@ -2046,22 +2104,102 @@ function delay(ms: number) {
   });
 }
 
-function authLabel(status: AppStateSnapshot['auth']['status']) {
+async function runAuthCheck(bridge: CommandDeckBridge): Promise<AuthCheckResult> {
+  try {
+    return await bridge.auth.check();
+  } catch (error) {
+    return {
+      status: 'error',
+      checkedAt: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Credential check failed unexpectedly.',
+    };
+  }
+}
+
+function supersededAuthCheckResult(result: AuthCheckResult): AuthCheckResult {
+  return {
+    status: 'checking',
+    checkedAt: result.checkedAt,
+    error: 'Credential check was superseded by a newer verification.',
+  };
+}
+
+function shouldConfirmAuthCheckFailure(
+  status: AuthStatus,
+  provider: AuthProvider,
+  hadPriorSuccess: boolean,
+) {
+  if (status === 'error') {
+    return true;
+  }
+
+  if (status !== 'disconnected' && status !== 'expiringSoon') {
+    return false;
+  }
+
+  return provider === 'aws' || hadPriorSuccess;
+}
+
+function authProviderName(provider: AuthProvider) {
+  switch (provider) {
+    case 'aws':
+      return 'AWS credential';
+    case 'custom':
+      return 'Custom credential';
+    case 'disabled':
+      return 'Credential monitor';
+  }
+}
+
+function authScopeDisclaimer(provider: AuthProvider) {
+  if (provider === 'aws') {
+    return 'This reports only the configured AWS check; it does not directly inspect running Claude sessions.';
+  }
+
+  if (provider === 'custom') {
+    return 'This reports only the configured custom check; it does not directly inspect running Claude sessions.';
+  }
+
+  return 'No credential check is inspecting running Claude sessions.';
+}
+
+function authCheckingDetails(provider: AuthProvider) {
+  return `Running the configured ${authProviderName(provider).toLowerCase()} check. ${authScopeDisclaimer(provider)}`;
+}
+
+function authCheckDetails(
+  result: AuthCheckResult,
+  provider: AuthProvider,
+  lastSuccessfulCheckAt?: string,
+) {
+  const scope = authScopeDisclaimer(provider);
+  if (result.status === 'connected') {
+    const identity = formatSafeIdentity(result.safeIdentity);
+    return `${identity ?? `${authProviderName(provider)} check passed.`} ${scope}`;
+  }
+
+  const failure = result.error ?? `${authProviderName(provider)} check did not pass.`;
+  const lastVerified = lastSuccessfulCheckAt ? ' A previous check succeeded.' : '';
+  return `${failure}${lastVerified} ${scope}`;
+}
+
+function authLabel(status: AppStateSnapshot['auth']['status'], provider: AuthProvider) {
+  const providerName = authProviderName(provider);
   switch (status) {
     case 'connected':
-      return 'Connected';
+      return `${providerName} check passed`;
     case 'checking':
-      return 'Checking';
+      return `Checking ${providerName.toLowerCase()}s`;
     case 'disconnected':
-      return 'Disconnected';
+      return `${providerName} check failed`;
     case 'error':
-      return 'Authentication error';
+      return `${providerName} check error`;
     case 'refreshing':
-      return 'Logging in';
+      return `${providerName} login running`;
     case 'expiringSoon':
-      return 'Expiring soon';
+      return `${providerName} may expire soon`;
     case 'notConfigured':
-      return 'Authentication setup required';
+      return `${providerName} not configured`;
   }
 }
 

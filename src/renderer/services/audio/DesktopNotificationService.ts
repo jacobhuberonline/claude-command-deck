@@ -142,22 +142,22 @@ function notificationCopy(
 
   if (event === 'session.authentication_may_be_required') {
     return {
-      title: `${name} may need authentication`,
-      body: 'Credential-related terminal output was detected locally.',
+      title: `${name} emitted a credential warning`,
+      body: 'Review the terminal output if the session stops responding normally.',
     };
   }
 
   if (event === 'auth.disconnected') {
     return {
-      title: 'Authentication appears disconnected',
-      body: 'Use the authentication console to refresh credentials.',
+      title: 'Credential check failed',
+      body: 'The configured provider check failed; running sessions are monitored separately.',
     };
   }
 
   if (event === 'auth.connected') {
     return {
-      title: 'Authentication connected',
-      body: 'The credential check completed successfully.',
+      title: 'Credential check passed',
+      body: 'The configured provider check completed successfully.',
     };
   }
 

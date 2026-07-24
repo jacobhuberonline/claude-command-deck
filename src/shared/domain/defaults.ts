@@ -283,8 +283,8 @@ export function createAuthStateFromConfiguration(auth: AuthConfiguration): AuthS
     return {
       provider: auth.provider,
       status: 'notConfigured',
-      label: 'Authentication disabled',
-      details: 'Credential monitoring is disabled.',
+      label: 'Credential monitor off',
+      details: 'No provider check is configured or inspecting running Claude sessions.',
     };
   }
 
@@ -292,15 +292,20 @@ export function createAuthStateFromConfiguration(auth: AuthConfiguration): AuthS
     return {
       provider: auth.provider,
       status: 'notConfigured',
-      label: 'Authentication setup required',
-      details: 'Add a credential check command in Settings.',
+      label:
+        auth.provider === 'aws' ? 'AWS monitor not configured' : 'Custom monitor not configured',
+      details:
+        'Add a credential check command in Settings; session processes are checked separately.',
     };
   }
 
   return {
     provider: auth.provider,
     status: 'notConfigured',
-    label: 'Ready to verify',
-    details: 'Use the authentication button to validate credentials.',
+    label: auth.provider === 'aws' ? 'AWS not checked' : 'Custom check not run',
+    details:
+      auth.provider === 'aws'
+        ? 'Optional AWS credential monitor; it does not directly inspect running Claude sessions.'
+        : 'Optional custom credential monitor; it does not directly inspect running Claude sessions.',
   };
 }

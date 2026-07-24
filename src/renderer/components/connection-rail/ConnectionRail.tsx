@@ -24,7 +24,7 @@ export function ConnectionRail({ auth, onOpenDetails }: ConnectionRailProps) {
       className={`connection-rail rail-${auth.status}`}
       type="button"
       onClick={onOpenDetails}
-      aria-label={`Open authentication settings. Current status: ${auth.label}`}
+      aria-label={`Open credential monitor. Current status: ${auth.label}`}
     >
       <span className="rail-line" aria-hidden="true" />
       <span className="rail-content">

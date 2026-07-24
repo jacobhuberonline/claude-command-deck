@@ -21,4 +21,8 @@ describe('phase 6 authentication parsing', () => {
   it('returns null for non-json output', () => {
     expect(parseAwsCallerIdentity('not json')).toBeNull();
   });
+
+  it('returns null when AWS output has no identity fields', () => {
+    expect(parseAwsCallerIdentity('{}')).toBeNull();
+  });
 });

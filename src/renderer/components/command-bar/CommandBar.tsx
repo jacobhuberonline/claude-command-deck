@@ -145,7 +145,7 @@ export function CommandBar({
           className={`icon-button auth-status-icon auth-${auth.status}`}
           type="button"
           title={`${auth.label}: ${auth.details}`}
-          aria-label="Verify or connect authentication"
+          aria-label={`Open credential monitor. ${auth.label}: ${auth.details}`}
           disabled={authBusy}
           onClick={onAuthAction}
         >

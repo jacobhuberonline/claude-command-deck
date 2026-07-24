@@ -60,7 +60,8 @@ const authenticationWarningPatterns = [
   /\bcould not load credentials\b/i,
   /\bexpired(token| credentials| session)\b/i,
   /\bsso session.*expired\b/i,
-  /\baccess denied\b/i,
+  /\b(?:credential|token|sso|authentication)\b.{0,80}\baccess denied\b/i,
+  /\baccess denied\b.{0,80}\b(?:credential|token|sso|authentication)\b/i,
   /\bauthentication (failed|required|expired)\b/i,
   /\blogin required\b/i,
 ];
@@ -93,6 +94,11 @@ export class ActivityClassifier {
 
     const detected = this.detectAttentionState(tracker.rollingText);
     if (detected) {
+      if (detected.activityState === 'authenticationMayBeRequired') {
+        // Credential warnings are edge-triggered. Keeping one in the rolling window would make
+        // every later chunk repeat it until enough unrelated terminal output displaced it.
+        tracker.rollingText = '';
+      }
       const events = this.eventsForAttentionState(detected.activityState);
       const completionEvent = this.maybeEmitEstimatedCompletion(tracker, nowMs);
       if (completionEvent) {
@@ -214,8 +220,8 @@ export class ActivityClassifier {
     if (authenticationWarningPatterns.some((pattern) => pattern.test(rollingText))) {
       return {
         activityState: 'authenticationMayBeRequired',
-        confidence: 'high',
-        statusMessage: 'Authentication may be required.',
+        confidence: 'medium',
+        statusMessage: 'Credential-related terminal output detected.',
       };
     }
 

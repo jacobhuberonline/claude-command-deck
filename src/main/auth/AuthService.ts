@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import * as pty from 'node-pty';
-import type { AuthCheckResult } from '../../shared/domain/types';
+import type { AuthCheckResult, AuthConfiguration } from '../../shared/domain/types';
 import type {
   AuthResizeRequest,
   AuthWriteRequest,
@@ -15,9 +15,15 @@ interface AuthServiceEvents {
   onExit: (exitCode: number | null, signal: string | null) => void;
 }
 
+interface AuthCheckFlight {
+  configurationKey: string;
+  promise: Promise<AuthCheckResult>;
+}
+
 export class AuthService {
-  private checkInFlight: Promise<AuthCheckResult> | null = null;
+  private checkInFlight: AuthCheckFlight | null = null;
   private refreshProcess: pty.IPty | null = null;
+  private freshCheckRequired = false;
 
   constructor(
     private readonly settingsStore: SettingsStore,
@@ -26,14 +32,24 @@ export class AuthService {
   ) {}
 
   check(): Promise<AuthCheckResult> {
-    if (this.checkInFlight) {
-      return this.checkInFlight;
+    const auth = this.settingsStore.load().auth;
+    const configurationKey = authCheckConfigurationKey(auth);
+    if (this.refreshProcess) {
+      return Promise.resolve({
+        status: 'refreshing',
+        checkedAt: new Date().toISOString(),
+        error: 'Credential login is still running.',
+      });
+    }
+    if (this.freshCheckRequired) {
+      this.freshCheckRequired = false;
+      return this.queueFreshCheck(auth, configurationKey);
+    }
+    if (this.checkInFlight?.configurationKey === configurationKey) {
+      return this.checkInFlight.promise;
     }
 
-    this.checkInFlight = this.runCheck().finally(() => {
-      this.checkInFlight = null;
-    });
-    return this.checkInFlight;
+    return this.queueFreshCheck(auth, configurationKey);
   }
 
   startRefresh(): CommandResult {
@@ -76,11 +92,11 @@ export class AuthService {
         exitCode: event.exitCode,
         signal,
       });
-      this.events.onExit(event.exitCode, signal);
       this.refreshProcess = null;
-      if (event.exitCode === 0) {
-        void this.check();
-      }
+      // The next check must run after any pre-login probe. The renderer owns presentation and
+      // requests this authoritative check after receiving the exit event.
+      this.freshCheckRequired = true;
+      this.events.onExit(event.exitCode, signal);
     });
 
     return { ok: true };
@@ -113,9 +129,36 @@ export class AuthService {
     return { ok: true };
   }
 
-  private async runCheck(): Promise<AuthCheckResult> {
-    const settings = this.settingsStore.load();
-    const auth = settings.auth;
+  private queueFreshCheck(
+    auth: AuthConfiguration,
+    configurationKey: string,
+  ): Promise<AuthCheckResult> {
+    const previous = this.checkInFlight?.promise;
+    const waitForPrevious = previous
+      ? previous.then(
+          () => undefined,
+          () => undefined,
+        )
+      : Promise.resolve();
+    const promise = waitForPrevious.then(() => this.runCheck(auth));
+    const flight: AuthCheckFlight = { configurationKey, promise };
+    this.checkInFlight = flight;
+    void promise.then(
+      () => {
+        if (this.checkInFlight === flight) {
+          this.checkInFlight = null;
+        }
+      },
+      () => {
+        if (this.checkInFlight === flight) {
+          this.checkInFlight = null;
+        }
+      },
+    );
+    return promise;
+  }
+
+  private async runCheck(auth: AuthConfiguration): Promise<AuthCheckResult> {
     const checkedAt = new Date().toISOString();
 
     if (auth.provider === 'disabled') {
@@ -140,66 +183,165 @@ export class AuthService {
     });
 
     return new Promise<AuthCheckResult>((resolve) => {
+      const startedAtMs = Date.now();
       let stdout = '';
       let stderr = '';
       let settled = false;
-      const command = buildShellCommand(auth.checkExecutable, auth.checkArgs, auth.shellMode);
-      const child = spawn(command.executable, command.args, {
-        cwd: auth.workingDirectory || process.cwd(),
-        shell: false,
-        windowsHide: true,
-      });
-
-      const timeout = windowlessTimeout(() => {
+      let timedOut = false;
+      let timeout: NodeJS.Timeout | undefined = undefined;
+      let terminateFallback: NodeJS.Timeout | undefined;
+      let killFallback: NodeJS.Timeout | undefined;
+      const finish = (result: AuthCheckResult, exitCode?: number | null) => {
         if (settled) {
           return;
         }
         settled = true;
-        child.kill();
-        resolve({ status: 'error', checkedAt, error: 'Credential check timed out.' });
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        if (terminateFallback) {
+          clearTimeout(terminateFallback);
+        }
+        if (killFallback) {
+          clearTimeout(killFallback);
+        }
+        this.logger.info('Authentication check completed', {
+          provider: auth.provider,
+          status: result.status,
+          durationMs: Date.now() - startedAtMs,
+          ...(exitCode === undefined ? {} : { exitCode }),
+        });
+        resolve(result);
+      };
+
+      const command = buildShellCommand(auth.checkExecutable, auth.checkArgs, auth.shellMode);
+      let child: ReturnType<typeof spawn>;
+      try {
+        child = spawn(command.executable, command.args, {
+          cwd: auth.workingDirectory || process.cwd(),
+          shell: false,
+          windowsHide: true,
+        });
+      } catch (error) {
+        finish({
+          status: 'error',
+          checkedAt,
+          error: error instanceof Error ? error.message : 'Credential check could not start.',
+        });
+        return;
+      }
+
+      timeout = windowlessTimeout(() => {
+        if (settled) {
+          return;
+        }
+        timedOut = true;
+        try {
+          child.kill();
+        } catch {
+          finish({ status: 'error', checkedAt, error: 'Credential check timed out.' });
+          return;
+        }
+        terminateFallback = windowlessTimeout(() => {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            finish({ status: 'error', checkedAt, error: 'Credential check timed out.' });
+            return;
+          }
+          killFallback = windowlessTimeout(() => {
+            finish({ status: 'error', checkedAt, error: 'Credential check timed out.' });
+          }, 1000);
+        }, 1000);
       }, auth.checkTimeoutSeconds * 1000);
 
-      child.stdout.setEncoding('utf8');
-      child.stderr.setEncoding('utf8');
-      child.stdout.on('data', (chunk: string) => {
+      child.stdout?.setEncoding('utf8');
+      child.stderr?.setEncoding('utf8');
+      child.stdout?.on('data', (chunk: string) => {
         stdout += chunk;
       });
-      child.stderr.on('data', (chunk: string) => {
+      child.stderr?.on('data', (chunk: string) => {
         stderr += chunk;
       });
       child.on('error', (error) => {
-        if (settled) {
+        if (timedOut) {
+          this.logger.warn('Authentication check process error during timeout cleanup', {
+            provider: auth.provider,
+            error: error.message,
+          });
           return;
         }
-        settled = true;
-        clearTimeout(timeout);
-        resolve({ status: 'error', checkedAt, error: error.message });
+        finish({ status: 'error', checkedAt, error: error.message });
       });
-      child.on('close', (code) => {
+      child.on('close', (code, signal) => {
         if (settled) {
           return;
         }
-        settled = true;
-        clearTimeout(timeout);
+
+        if (timedOut) {
+          finish({ status: 'error', checkedAt, error: 'Credential check timed out.' }, code);
+          return;
+        }
+
+        if (code === null || signal) {
+          finish(
+            {
+              status: 'error',
+              checkedAt,
+              error: `Credential check terminated by signal ${signal ?? 'unknown'}.`,
+            },
+            code,
+          );
+          return;
+        }
 
         if (code !== 0) {
-          resolve({
-            status: 'disconnected',
-            checkedAt,
-            error: stderr.trim() || `Credential check exited with code ${code ?? 'unknown'}.`,
-          });
+          finish(
+            {
+              status: 'disconnected',
+              checkedAt,
+              error: stderr.trim() || `Credential check exited with code ${code ?? 'unknown'}.`,
+            },
+            code,
+          );
           return;
         }
 
         const safeIdentity = auth.provider === 'aws' ? parseAwsCallerIdentity(stdout) : undefined;
-        resolve({
-          status: 'connected',
-          checkedAt,
-          safeIdentity: safeIdentity ?? undefined,
-        });
+        if (auth.provider === 'aws' && !safeIdentity) {
+          finish(
+            {
+              status: 'error',
+              checkedAt,
+              error: 'AWS credential check returned an invalid identity response.',
+            },
+            code,
+          );
+          return;
+        }
+
+        finish(
+          {
+            status: 'connected',
+            checkedAt,
+            safeIdentity: safeIdentity ?? undefined,
+          },
+          code,
+        );
       });
     });
   }
+}
+
+function authCheckConfigurationKey(auth: AuthConfiguration): string {
+  return JSON.stringify({
+    provider: auth.provider,
+    checkExecutable: auth.checkExecutable,
+    checkArgs: auth.checkArgs,
+    workingDirectory: auth.workingDirectory,
+    shellMode: auth.shellMode,
+    checkTimeoutSeconds: auth.checkTimeoutSeconds,
+  });
 }
 
 function buildShellCommand(executable: string, args: string[], shellMode: boolean) {

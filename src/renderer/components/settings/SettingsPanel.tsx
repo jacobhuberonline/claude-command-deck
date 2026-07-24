@@ -37,7 +37,7 @@ const sections: Array<{ id: SettingsSection; label: string }> = [
   { id: 'general', label: 'General' },
   { id: 'claude', label: 'Claude Code' },
   { id: 'shell', label: 'Shell' },
-  { id: 'authentication', label: 'Authentication' },
+  { id: 'authentication', label: 'Credential monitor' },
   { id: 'audio', label: 'Audio' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'appearance', label: 'Appearance' },
@@ -377,7 +377,11 @@ function AuthenticationSettings({
 
   return (
     <>
-      <h3>Authentication</h3>
+      <h3>Credential monitor</h3>
+      <p className="settings-hint">
+        This optional monitor does not directly inspect running Claude sessions. The AWS preset
+        checks local AWS credentials; a custom check reports only the command&apos;s exit status.
+      </p>
       <label className="settings-field">
         <span>Provider</span>
         <select
@@ -442,7 +446,7 @@ function AuthenticationSettings({
         onChange={(value) => update({ checkTimeoutSeconds: value })}
       />
       <ToggleField
-        label="Startup checks"
+        label="Check once at app start"
         enabled={auth.startupChecksEnabled}
         onToggle={() => update({ startupChecksEnabled: !auth.startupChecksEnabled })}
       />

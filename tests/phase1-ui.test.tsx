@@ -21,7 +21,7 @@ describe('phase 1 visual shell', () => {
     expect(await screen.findByRole('heading', { name: 'Claude Command Deck' })).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: /Verify or connect authentication/i,
+        name: /Open credential monitor/i,
       }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(4);
@@ -87,7 +87,7 @@ describe('phase 1 visual shell', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open Settings' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Settings' });
-    expect(within(dialog).getByRole('button', { name: 'Authentication' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Credential monitor' })).toBeInTheDocument();
     expect(within(dialog).getByText('Schema v2')).toBeInTheDocument();
   });
 
@@ -540,7 +540,7 @@ describe('phase 1 visual shell', () => {
     render(<App />);
 
     const authButton = await screen.findByRole('button', {
-      name: /Verify or connect authentication/i,
+      name: /Open credential monitor/i,
     });
     await waitFor(() =>
       expect(authButton).toHaveAttribute('title', expect.stringContaining('Connected')),
@@ -548,7 +548,7 @@ describe('phase 1 visual shell', () => {
 
     fireEvent.click(authButton);
 
-    await waitFor(() => expect(check).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Credential login console test adapter')).toBeInTheDocument();
   });

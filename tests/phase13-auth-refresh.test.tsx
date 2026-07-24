@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { App } from '../src/renderer/app/App';
 import { createPhaseOneState } from '../src/shared/domain/defaults';
@@ -51,7 +51,7 @@ describe('phase 13 authentication refresh orchestration', () => {
     render(<App />);
 
     const authButton = await screen.findByRole('button', {
-      name: /Verify or connect authentication/i,
+      name: /Open credential monitor/i,
     });
     await waitFor(() =>
       expect(authButton).toHaveAttribute('title', expect.stringContaining('Connected')),
@@ -59,8 +59,219 @@ describe('phase 13 authentication refresh orchestration', () => {
 
     window.dispatchEvent(new Event('focus'));
 
-    await waitFor(() => expect(check).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(1));
+  });
+
+  it('confirms an initial AWS failure before publishing a disconnected state', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth = {
+      ...snapshot.settings.auth,
+      startupChecksEnabled: true,
+      refreshExecutable: 'aws',
+      refreshArgs: ['sso', 'login'],
+    };
+
+    const check = vi
+      .fn<CommandDeckBridge['auth']['check']>()
+      .mockResolvedValueOnce({
+        status: 'disconnected',
+        checkedAt: new Date().toISOString(),
+        error: 'Temporary startup failure.',
+      })
+      .mockResolvedValueOnce({
+        status: 'connected',
+        checkedAt: new Date().toISOString(),
+      });
+    const startRefresh = vi.fn(() => Promise.resolve({ ok: true as const }));
+    window.commandDeck = createMockBridge(snapshot, {
+      check,
+      startRefresh,
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
+    expect(startRefresh).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole('button', {
+        name: /AWS credential check passed.*does not directly inspect running Claude sessions/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('confirms a transient failure before replacing a known-good credential status', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    });
+
+    const snapshot = createPhaseOneState('test');
+    const lastCheckedAt = new Date(Date.now() - 120_000).toISOString();
+    snapshot.settings.auth = {
+      ...snapshot.settings.auth,
+      startupChecksEnabled: false,
+      refreshExecutable: 'aws',
+      refreshArgs: ['sso', 'login'],
+      checkIntervalSeconds: 30,
+    };
+    snapshot.auth = {
+      provider: 'aws',
+      status: 'connected',
+      label: 'AWS credential check passed',
+      details: 'Previously verified.',
+      lastCheckedAt,
+      lastSuccessfulCheckAt: lastCheckedAt,
+    };
+
+    const check = vi
+      .fn<CommandDeckBridge['auth']['check']>()
+      .mockResolvedValueOnce({
+        status: 'disconnected',
+        checkedAt: new Date().toISOString(),
+        error: 'Temporary credential probe failure.',
+      })
+      .mockResolvedValueOnce({
+        status: 'connected',
+        checkedAt: new Date().toISOString(),
+      });
+    const startRefresh = vi.fn(() => Promise.resolve({ ok: true as const }));
+    window.commandDeck = createMockBridge(snapshot, {
+      check,
+      startRefresh,
+    });
+
+    render(<App />);
+    await screen.findByRole('button', { name: /Open credential monitor/i });
+    window.dispatchEvent(new Event('focus'));
+
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
+    expect(startRefresh).not.toHaveBeenCalled();
+    const authButton = screen.getByRole('button', {
+      name: /Open credential monitor/i,
+    });
+    await waitFor(() =>
+      expect(authButton).toHaveAccessibleName(
+        /AWS credential check passed.*does not directly inspect running Claude sessions/i,
+      ),
+    );
+  });
+
+  it('rechecks credentials instead of treating a cancelled login as disconnection', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    const checkedAt = new Date().toISOString();
+    snapshot.auth = {
+      provider: 'aws',
+      status: 'connected',
+      label: 'AWS credential check passed',
+      details: 'Previously verified.',
+      lastCheckedAt: checkedAt,
+      lastSuccessfulCheckAt: checkedAt,
+    };
+
+    let exitListener: Parameters<CommandDeckBridge['auth']['onExit']>[0] | undefined;
+    const check = vi.fn<CommandDeckBridge['auth']['check']>(() =>
+      Promise.resolve({
+        status: 'connected',
+        checkedAt: new Date().toISOString(),
+      }),
+    );
+    const startRefresh = vi.fn(() => Promise.resolve({ ok: true as const }));
+    window.commandDeck = createMockBridge(snapshot, {
+      check,
+      startRefresh,
+      onExit: vi.fn<CommandDeckBridge['auth']['onExit']>((listener) => {
+        exitListener = listener;
+        return () => undefined;
+      }),
+    });
+
+    render(<App />);
+    await screen.findByRole('button', { name: /Open credential monitor/i });
+
+    act(() => {
+      exitListener?.({ exitCode: 130, signal: 'SIGTERM' });
+    });
+
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(1));
+    expect(startRefresh).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole('button', {
+        name: /AWS credential check passed.*does not directly inspect running Claude sessions/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('does not let a pre-login console check overwrite a newly restarted login', async () => {
+    const snapshot = createPhaseOneState('test');
+    const checkedAt = new Date().toISOString();
+    snapshot.settings.auth = {
+      ...snapshot.settings.auth,
+      startupChecksEnabled: false,
+      refreshExecutable: 'aws',
+      refreshArgs: ['sso', 'login'],
+    };
+    snapshot.auth = {
+      provider: 'aws',
+      status: 'connected',
+      label: 'AWS credential check passed',
+      details: 'Previously verified.',
+      lastCheckedAt: checkedAt,
+      lastSuccessfulCheckAt: checkedAt,
+    };
+
+    let exitListener: Parameters<CommandDeckBridge['auth']['onExit']>[0] | undefined;
+    let resolvePostExitCheck: ((result: AuthCheckResult) => void) | undefined;
+    const postExitCheck = new Promise<AuthCheckResult>((resolve) => {
+      resolvePostExitCheck = resolve;
+    });
+    const disconnectedResult = {
+      status: 'disconnected' as const,
+      checkedAt: new Date().toISOString(),
+      error: 'Credentials expired.',
+    };
+    const check = vi
+      .fn<CommandDeckBridge['auth']['check']>()
+      .mockResolvedValueOnce(disconnectedResult)
+      .mockResolvedValueOnce(disconnectedResult)
+      .mockReturnValueOnce(postExitCheck);
+    const startRefresh = vi.fn(() => Promise.resolve({ ok: true as const }));
+    window.commandDeck = createMockBridge(snapshot, {
+      check,
+      startRefresh,
+      onExit: vi.fn<CommandDeckBridge['auth']['onExit']>((listener) => {
+        exitListener = listener;
+        return () => undefined;
+      }),
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: /Open credential monitor/i }));
+    await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Credential login console test adapter')).toBeInTheDocument();
+
+    act(() => {
+      exitListener?.({ exitCode: 0, signal: null });
+    });
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(3));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start login' }));
+    await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      resolvePostExitCheck?.({
+        status: 'connected',
+        checkedAt: new Date().toISOString(),
+      });
+      await postExitCheck;
+    });
+
+    expect(
+      screen.getByRole('button', {
+        name: /AWS credential login running/i,
+      }),
+    ).toBeInTheDocument();
   });
 });
 

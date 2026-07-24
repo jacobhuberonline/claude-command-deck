@@ -52,9 +52,9 @@ Claude discovery checks the effective executable that will actually be launched,
 
 Fresh conversations receive a unique `--name` when supported. Later continuation uses `--resume <name>` so parallel sessions can remain distinct even when they share a directory. The app refuses to degrade a known named conversation to directory-most-recent; legacy unnamed sessions require an explicit warning when directories overlap. Model selection is optional and per-session, with an empty value adding no override beyond the configured default launch arguments. One-shot main-process launch plans protect against stale UI state, changed profiles, and process-replacement races; they are integrity controls for the trusted local UI, not a sandbox against a compromised renderer.
 
-## Authentication Monitoring
+## Credential Monitoring
 
-Authentication supports disabled, AWS preset, and custom command modes. Checks run with timeouts and never overlap. AWS structured output parsing keeps only safe identity metadata. Refresh runs in a dedicated interactive PTY displayed in an authentication console. Raw authentication output is never persisted by default.
+Credential monitoring supports disabled, AWS preset, and custom command modes. It reports only the configured provider check and does not directly inspect running Claude sessions. Checks run with timeouts and do not overlap; configuration changes and login completion queue a fresh authoritative check instead of reusing an older result. AWS structured output parsing keeps only safe identity metadata. Login runs in a dedicated interactive PTY displayed in a credential console. Raw credential output is never persisted by default.
 
 ## Audio And Notifications
 

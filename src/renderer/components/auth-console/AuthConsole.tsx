@@ -2,17 +2,18 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ClipboardPaste } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { AuthBridge } from '../../../shared/ipc/contracts';
+import type { AuthBridge, CommandResult } from '../../../shared/ipc/contracts';
 
 const isTestRuntime = import.meta.env.MODE === 'test';
 
 interface AuthConsoleProps {
   open: boolean;
   authBridge: AuthBridge;
+  onStartLogin: () => Promise<CommandResult>;
   onClose: () => void;
 }
 
-export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
+export function AuthConsole({ open, authBridge, onStartLogin, onClose }: AuthConsoleProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const pasteClipboard = useCallback(() => {
@@ -106,7 +107,7 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
             className="control-button"
             type="button"
             onClick={() => {
-              void authBridge.startRefresh().then((result) => {
+              void onStartLogin().then((result) => {
                 if (result.ok) {
                   terminalRef.current?.writeln('\x1b[33mLOCAL SYSTEM\x1b[0m Starting login.');
                 } else {

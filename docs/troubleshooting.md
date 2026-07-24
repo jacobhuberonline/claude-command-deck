@@ -16,9 +16,9 @@ Run `npm install` again so the `postinstall` guard can repair the `node-pty` hel
 
 The app discovers the configured Claude executable at runtime. If diagnostics report it missing, install Claude Code or set the executable name/path in Settings. Reload & Continue only uses continuation flags that the local CLI reports in `--help`.
 
-## Authentication Reports Disconnected
+## Credential Monitor Reports A Failure
 
-For the AWS preset, confirm that `aws sts get-caller-identity --output json` succeeds in a normal terminal. Configure a refresh command before using the interactive authentication console.
+The monitor reports only its configured provider check and does not directly inspect running Claude sessions, so a session may remain usable when an AWS or custom check fails. For the AWS preset, confirm that `aws sts get-caller-identity --output json` succeeds in a normal terminal. Configure a login command before using the interactive credential console.
 
 ## Sounds Do Not Play
 

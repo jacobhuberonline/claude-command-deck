@@ -57,7 +57,7 @@ const activityLabels: Record<SessionSnapshot['runtime']['activityState'], string
   active: 'Active',
   likelyAwaitingInput: 'Likely awaiting input',
   possiblePermissionPrompt: 'Possible permission prompt',
-  authenticationMayBeRequired: 'Authentication may be required',
+  authenticationMayBeRequired: 'Credential warning detected',
 };
 
 export function SessionBay({
