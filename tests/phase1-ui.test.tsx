@@ -326,6 +326,59 @@ describe('phase 1 visual shell', () => {
     await waitFor(() => expect(bridge.terminal.startClaude).toHaveBeenCalledTimes(1));
   });
 
+  it('returns keyboard focus to the terminal when a resumed process starts', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    snapshot.sessions[0]!.configuration.workingDirectory = '/Users/example/project';
+    let stateListener: Parameters<CommandDeckBridge['terminal']['onState']>[0] | undefined;
+    const bridge = createMockBridge(
+      snapshot,
+      {},
+      {
+        onState: vi.fn<CommandDeckBridge['terminal']['onState']>((listener) => {
+          stateListener = listener;
+          return () => undefined;
+        }),
+      },
+    );
+    window.commandDeck = bridge;
+
+    render(<App />);
+    const article = await screen.findByRole('article', {
+      name: /Session 1 session bay/i,
+    });
+    const resumeButton = within(article).getByRole('button', { name: 'Resume…' });
+    const terminalHost = article.querySelector<HTMLElement>('.terminal-host');
+    expect(terminalHost).not.toBeNull();
+
+    for (let restart = 1; restart <= 3; restart += 1) {
+      resumeButton.focus();
+      expect(document.activeElement).toBe(resumeButton);
+      fireEvent.click(resumeButton);
+
+      await waitFor(() => expect(bridge.terminal.startClaude).toHaveBeenCalledTimes(restart));
+      await waitFor(() => expect(document.activeElement).toBe(terminalHost));
+
+      act(() => {
+        stateListener?.({
+          sessionId: 'session-1',
+          snapshot: {
+            id: `process-claude-${restart}`,
+            type: 'claudeSession',
+            sessionId: 'session-1',
+            workingDirectory: '/Users/example/project',
+            executable: '/mock/claude',
+            args: ['--resume'],
+            startedAt: new Date().toISOString(),
+            state: 'running',
+            restartGeneration: restart,
+          },
+        });
+      });
+      await waitFor(() => expect(resumeButton).toBeEnabled());
+    }
+  });
+
   it('applies a main-confirmed conversation binding to the local session view', async () => {
     const snapshot = createPhaseOneState('test');
     snapshot.settings.auth.startupChecksEnabled = false;

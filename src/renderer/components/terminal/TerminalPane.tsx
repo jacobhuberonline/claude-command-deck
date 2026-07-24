@@ -68,6 +68,17 @@ export function TerminalPane({
     setTerminalFontSize(DEFAULT_TERMINAL_FONT_SIZE);
   }, [setTerminalFontSize]);
 
+  const focusTerminal = useCallback(() => {
+    if (terminalRef.current) {
+      terminalRef.current.focus();
+      return;
+    }
+
+    if (isTestRuntime) {
+      containerRef.current?.focus();
+    }
+  }, []);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -271,16 +282,16 @@ export function TerminalPane({
   ]);
 
   useEffect(() => {
-    if (
-      isTestRuntime ||
-      (session.runtime.processState !== 'starting' && session.runtime.processState !== 'running')
-    ) {
+    if (session.runtime.processState !== 'starting' && session.runtime.processState !== 'running') {
       return undefined;
     }
 
     let retryTimer: number | undefined;
     const animationFrame = window.requestAnimationFrame(() => {
       resizeTerminalRef.current();
+      if (active) {
+        focusTerminal();
+      }
       retryTimer = window.setTimeout(() => resizeTerminalRef.current(), 80);
     });
 
@@ -290,7 +301,7 @@ export function TerminalPane({
         window.clearTimeout(retryTimer);
       }
     };
-  }, [session.runtime.processState]);
+  }, [active, focusTerminal, session.runtime.processState]);
 
   useEffect(() => {
     if (!active) {
@@ -299,10 +310,10 @@ export function TerminalPane({
 
     const animationFrame = window.requestAnimationFrame(() => {
       resizeTerminalRef.current();
-      terminalRef.current?.focus();
+      focusTerminal();
     });
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [active, focusRequest]);
+  }, [active, focusRequest, focusTerminal]);
 
   const copySelection = () => {
     const selection = terminalRef.current?.getSelection();
@@ -371,7 +382,7 @@ export function TerminalPane({
           </button>
         </div>
       </div>
-      <div ref={containerRef} className="terminal-host">
+      <div ref={containerRef} className="terminal-host" tabIndex={isTestRuntime ? -1 : undefined}>
         {isTestRuntime ? (
           <span className="terminal-test-adapter">Terminal test adapter</span>
         ) : null}
