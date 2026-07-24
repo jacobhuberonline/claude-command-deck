@@ -46,7 +46,7 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(hostRef.current);
-    terminal.writeln('\x1b[36mAUTHENTICATION CONSOLE\x1b[0m');
+    terminal.writeln('\x1b[36mCredential login session\x1b[0m');
     terminalRef.current = terminal;
     terminal.attachCustomKeyEventHandler((event) => {
       if (
@@ -68,7 +68,7 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
     const offExit = authBridge.onExit((event) => {
       terminal.writeln('');
       terminal.writeln(
-        `\x1b[33mLOCAL SYSTEM\x1b[0m Refresh exited with code ${event.exitCode ?? 'unknown'}.`,
+        `\x1b[33mLOCAL SYSTEM\x1b[0m Login command exited with code ${event.exitCode ?? 'unknown'}.`,
       );
     });
     const resize = () => {
@@ -98,9 +98,9 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
   }
 
   return (
-    <section className="auth-console" aria-label="Authentication console">
+    <section className="auth-console" aria-label="Credential login console">
       <header className="auth-console-header">
-        <strong>Authentication console</strong>
+        <strong>Credential login</strong>
         <div>
           <button
             className="control-button"
@@ -108,14 +108,14 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
             onClick={() => {
               void authBridge.startRefresh().then((result) => {
                 if (result.ok) {
-                  terminalRef.current?.writeln('\x1b[33mLOCAL SYSTEM\x1b[0m Starting refresh.');
+                  terminalRef.current?.writeln('\x1b[33mLOCAL SYSTEM\x1b[0m Starting login.');
                 } else {
                   terminalRef.current?.writeln(`\x1b[31mLOCAL SYSTEM\x1b[0m ${result.error}`);
                 }
               });
             }}
           >
-            Start refresh
+            Start login
           </button>
           <button className="control-button" type="button" onClick={pasteClipboard}>
             <ClipboardPaste size={14} aria-hidden="true" />
@@ -136,7 +136,7 @@ export function AuthConsole({ open, authBridge, onClose }: AuthConsoleProps) {
         </div>
       </header>
       <div ref={hostRef} className="auth-console-terminal">
-        {isTestRuntime ? 'Authentication console test adapter' : null}
+        {isTestRuntime ? 'Credential login console test adapter' : null}
       </div>
     </section>
   );

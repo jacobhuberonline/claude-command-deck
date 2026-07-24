@@ -9,7 +9,11 @@ export class SafeLogger {
   private readonly logFile: string;
 
   constructor(private readonly logDirectory = join(app.getPath('userData'), 'logs')) {
-    mkdirSync(logDirectory, { recursive: true });
+    try {
+      mkdirSync(logDirectory, { recursive: true });
+    } catch {
+      // Logging is diagnostic and must never prevent the application from starting.
+    }
     this.logFile = join(logDirectory, 'claude-command-deck.log');
   }
 
@@ -41,7 +45,11 @@ export class SafeLogger {
       metadata: sanitizeMetadata(metadata),
     };
 
-    appendFileSync(this.logFile, `${JSON.stringify(entry)}\n`, 'utf8');
+    try {
+      appendFileSync(this.logFile, `${JSON.stringify(entry)}\n`, 'utf8');
+    } catch {
+      // Process and settings operations must continue if the diagnostic log is unavailable.
+    }
   }
 }
 

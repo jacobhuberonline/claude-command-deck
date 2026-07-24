@@ -9,12 +9,19 @@ import {
   Square,
   TerminalSquare,
 } from 'lucide-react';
-import type { SessionId, SessionLaunchMode, SessionSnapshot } from '../../../shared/domain/types';
+import type {
+  SessionConfiguration,
+  SessionId,
+  SessionLaunchMode,
+  SessionSnapshot,
+} from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
+import type { TerminalReplayStore } from '../../services/terminal/TerminalReplayStore';
 import { SessionWorkbench } from './SessionWorkbench';
 
 interface SessionBayProps {
   session: SessionSnapshot;
+  terminalFocusRequest: number;
   isFocused: boolean;
   isCompact?: boolean;
   isLarge?: boolean;
@@ -26,7 +33,9 @@ interface SessionBayProps {
   onSelectDirectory: (sessionId: SessionId) => void;
   onOpenDirectory: (sessionId: SessionId) => void;
   onStopSession: (sessionId: SessionId) => void;
+  onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
   terminalBridge: TerminalBridge;
+  terminalReplayStore: TerminalReplayStore;
 }
 
 const processLabels: Record<SessionSnapshot['runtime']['processState'], string> = {
@@ -53,6 +62,7 @@ const activityLabels: Record<SessionSnapshot['runtime']['activityState'], string
 
 export function SessionBay({
   session,
+  terminalFocusRequest,
   isFocused,
   isCompact = false,
   isLarge = false,
@@ -64,17 +74,20 @@ export function SessionBay({
   onSelectDirectory,
   onOpenDirectory,
   onStopSession,
+  onUpdateSessionConfiguration,
   terminalBridge,
+  terminalReplayStore,
 }: SessionBayProps) {
   const { configuration, runtime } = session;
+  const modelLabel = configuration.model.trim() || 'Default';
   const isAttention =
     runtime.attention ||
     runtime.activityState === 'possiblePermissionPrompt' ||
     runtime.activityState === 'authenticationMayBeRequired';
   const showWorkbench = !isCompact;
-  const directoryChangeDisabled = ['starting', 'running', 'restarting', 'stopping'].includes(
-    runtime.processState,
-  );
+  const directoryChangeDisabled =
+    ['starting', 'running', 'restarting', 'stopping'].includes(runtime.processState) ||
+    (runtime.processState === 'error' && runtime.processType !== undefined);
   const [selectedLaunchMode, setSelectedLaunchMode] = useState<SessionLaunchMode>(
     configuration.launchMode,
   );
@@ -92,23 +105,16 @@ export function SessionBay({
     >
       <div className="bay-accent" aria-hidden="true" />
       <header className="bay-header">
-        <button
+        <div
           className="bay-title"
-          type="button"
-          disabled={directoryChangeDisabled}
-          onClick={() => onSelectDirectory(configuration.id)}
-          title={
-            directoryChangeDisabled
-              ? 'Stop the session before changing directory'
-              : configuration.workingDirectory || 'Select directory'
-          }
-          aria-label={`Change directory for ${configuration.name}`}
+          title={configuration.workingDirectory || 'No directory selected'}
         >
           <span className="status-dot" aria-hidden="true" />
           <span>
             <strong>{configuration.name}</strong>
+            <small>{configuration.workingDirectory || 'Choose a working directory'}</small>
           </span>
-        </button>
+        </div>
         <div className="bay-header-actions">
           {configuration.workingDirectory && runtime.sameProject ? (
             <span className="same-project">Same project</span>
@@ -116,13 +122,11 @@ export function SessionBay({
           <button
             className="icon-button quiet"
             type="button"
-            title="Focus session"
-            aria-label={`Focus ${configuration.name}`}
+            title="Hide or show the session navigator"
+            aria-label="Toggle session navigator"
             onClick={() => {
               onFocus();
-              if (!isCompact) {
-                onToggleFocusMode();
-              }
+              onToggleFocusMode();
             }}
           >
             <Maximize2 size={15} aria-hidden="true" />
@@ -137,6 +141,10 @@ export function SessionBay({
           value={activityLabels[runtime.activityState]}
           attention={isAttention}
         />
+        {configuration.model.trim() ? <StatusPair label="Model" value={modelLabel} /> : null}
+        {configuration.hasNamedConversation ? (
+          <StatusPair label="Conversation" value={configuration.claudeSessionName} />
+        ) : null}
         <StatusPair
           label="Started"
           value={runtime.startedAt ? formatShortTime(runtime.startedAt) : 'Not running'}
@@ -150,11 +158,14 @@ export function SessionBay({
       {showWorkbench ? (
         <SessionWorkbench
           session={session}
+          terminalFocusRequest={terminalFocusRequest}
           onLaunchClaude={onLaunchClaude}
           onSelectDirectory={onSelectDirectory}
           onStartShell={onStartShell}
           onStopSession={onStopSession}
+          onUpdateSessionConfiguration={onUpdateSessionConfiguration}
           terminalBridge={terminalBridge}
+          terminalReplayStore={terminalReplayStore}
         />
       ) : null}
 

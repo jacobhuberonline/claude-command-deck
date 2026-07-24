@@ -12,7 +12,7 @@ import type {
   SessionRuntimeState,
   SessionSnapshot,
 } from './types';
-import { SESSION_IDS } from './types';
+import { MAX_SESSION_COUNT, SESSION_IDS, SETTINGS_SCHEMA_VERSION } from './types';
 
 const defaultSessionAudio: SessionAudioPreferences = {
   enabled: true,
@@ -72,16 +72,24 @@ export const defaultAuthConfiguration: AuthConfiguration = {
   nativeNotificationsEnabled: true,
 };
 
-export function createDefaultSessionConfiguration(id: SessionId): SessionConfiguration {
-  const index = SESSION_IDS.indexOf(id) + 1;
+export function createDefaultSessionConfiguration(
+  id: SessionId,
+  indexOverride?: number,
+): SessionConfiguration {
+  const defaultIndex = SESSION_IDS.indexOf(id as (typeof SESSION_IDS)[number]) + 1;
+  const index = indexOverride ?? (defaultIndex > 0 ? defaultIndex : 1);
 
   return {
     id,
     name: `Session ${index}`,
+    role: 'project',
     workingDirectory: '',
-    executable: 'claude',
+    executable: '',
     args: [],
-    launchMode: 'continueMostRecent',
+    model: '',
+    claudeSessionName: createClaudeSessionName(`session-${index}`, id),
+    hasNamedConversation: false,
+    launchMode: 'new',
     scrollback: 5000,
     restoreOnLaunch: false,
     audio: { ...defaultSessionAudio },
@@ -93,7 +101,7 @@ export function createDefaultRuntimeState(processState: SessionRuntimeState['pro
     processState,
     activityState: 'unknown',
     activityConfidence: 'low',
-    statusMessage: 'Ready for configuration',
+    statusMessage: 'Select a project directory to begin.',
     sameProject: false,
     attention: false,
   } satisfies SessionRuntimeState;
@@ -101,11 +109,11 @@ export function createDefaultRuntimeState(processState: SessionRuntimeState['pro
 
 export function createDefaultSettings(): ApplicationSettings {
   return {
-    schemaVersion: 1,
+    schemaVersion: SETTINGS_SCHEMA_VERSION,
     shellExecutable: 'pwsh.exe',
     claudeExecutable: 'claude',
     claudeBaseArgs: [],
-    sessions: SESSION_IDS.map(createDefaultSessionConfiguration),
+    sessions: SESSION_IDS.map((id, index) => createDefaultSessionConfiguration(id, index + 1)),
     focusedSessionId: 'session-1',
     focusMode: false,
     auth: { ...defaultAuthConfiguration },
@@ -117,68 +125,13 @@ export function createDefaultSettings(): ApplicationSettings {
   };
 }
 
-export function createPhaseOneState(
-  appVersion: string,
-  options: { workspaceRoot?: string } = {},
-): AppStateSnapshot {
+export function createPhaseOneState(appVersion: string): AppStateSnapshot {
   const settings = createDefaultSettings();
   const now = new Date().toISOString();
-  const configuredDirectory = options.workspaceRoot ?? 'C:\\Code\\api-skill-test';
-  const configuredSessions = settings.sessions.map((configuration, index): SessionSnapshot => {
-    const runtimeByIndex: SessionRuntimeState[] = [
-      {
-        ...createDefaultRuntimeState('empty'),
-        statusMessage: 'Select a project directory to begin.',
-      },
-      {
-        ...createDefaultRuntimeState('stopped'),
-        activityState: 'idle',
-        statusMessage: 'Configured and stopped.',
-      },
-      {
-        ...createDefaultRuntimeState('running'),
-        activityState: 'possiblePermissionPrompt',
-        activityConfidence: 'medium',
-        startedAt: now,
-        lastOutputAt: now,
-        statusMessage: 'Possible permission prompt.',
-        sameProject: true,
-        attention: true,
-      },
-      {
-        ...createDefaultRuntimeState('crashed'),
-        activityState: 'authenticationMayBeRequired',
-        activityConfidence: 'medium',
-        startedAt: now,
-        lastOutputAt: now,
-        exitCode: 1,
-        statusMessage: 'Process exited unexpectedly.',
-        sameProject: true,
-        attention: true,
-      },
-    ];
-
-    const workingDirectory = index === 0 ? '' : configuredDirectory;
-
-    return {
-      configuration: {
-        ...configuration,
-        name: ['Unassigned Bay', 'Provider API', 'API Skill Test', 'API Skill Test Lab'][index]!,
-        workingDirectory,
-      },
-      runtime: runtimeByIndex[index]!,
-    };
-  });
+  const state = createAppStateFromSettings(appVersion, settings);
 
   return {
-    sessions: configuredSessions,
-    auth: {
-      provider: 'aws',
-      status: 'notConfigured',
-      label: 'AWS not configured',
-      details: 'Configure a credential check command in Settings.',
-    } satisfies AuthStateSnapshot,
-    settings,
+    ...state,
     diagnostics: [
       {
         id: 'secure-electron',
@@ -187,15 +140,8 @@ export function createPhaseOneState(
         detail: 'contextIsolation enabled, nodeIntegration disabled, remote module unused.',
         checkedAt: now,
       },
-      {
-        id: 'terminal-adapter',
-        label: 'Terminal adapter',
-        status: 'warn',
-        detail: 'Visual placeholder only until Phase 2 PTY integration.',
-        checkedAt: now,
-      },
+      ...state.diagnostics,
     ],
-    appVersion,
   };
 }
 
@@ -204,9 +150,10 @@ export function createAppStateFromSettings(
   settings: ApplicationSettings,
 ): AppStateSnapshot {
   const now = new Date().toISOString();
+  const normalizedSettings = normalizeApplicationSettings(settings);
 
   return {
-    sessions: settings.sessions.map((configuration): SessionSnapshot => {
+    sessions: normalizedSettings.sessions.map((configuration): SessionSnapshot => {
       const configured = configuration.workingDirectory.trim().length > 0;
       return {
         configuration: {
@@ -222,32 +169,138 @@ export function createAppStateFromSettings(
         },
       };
     }),
-    auth: {
-      provider: settings.auth.provider,
-      status: settings.auth.provider === 'disabled' ? 'notConfigured' : 'notConfigured',
-      label:
-        settings.auth.provider === 'disabled'
-          ? 'Authentication disabled'
-          : settings.auth.checkExecutable.trim()
-            ? 'Ready to check'
-            : 'AWS not configured',
-      details:
-        settings.auth.provider === 'disabled'
-          ? 'Authentication monitoring is disabled.'
-          : settings.auth.checkExecutable.trim()
-            ? 'Click Check Connection to validate credentials.'
-            : 'Configure a credential check command in Settings.',
-    },
-    settings,
+    auth: createAuthStateFromConfiguration(normalizedSettings.auth),
+    settings: normalizedSettings,
     diagnostics: [
       {
         id: 'settings-schema',
         label: 'Settings schema',
         status: 'pass',
-        detail: `Loaded schema v${settings.schemaVersion}; sessions restore stopped by default.`,
+        detail: `Loaded schema v${normalizedSettings.schemaVersion}; sessions restore stopped by default.`,
         checkedAt: now,
       },
     ],
     appVersion,
+  };
+}
+
+export function normalizeApplicationSettings(settings: ApplicationSettings): ApplicationSettings {
+  const defaults = createDefaultSettings();
+  const sourceSessions = settings.sessions.length > 0 ? settings.sessions : defaults.sessions;
+  const seenIds = new Set<SessionId>();
+  const sessions = sourceSessions
+    .filter((session) => {
+      if (seenIds.has(session.id)) {
+        return false;
+      }
+      seenIds.add(session.id);
+      return true;
+    })
+    .slice(0, MAX_SESSION_COUNT)
+    .map((configured, index) => {
+      const defaultSession = createDefaultSessionConfiguration(configured.id, index + 1);
+      const retiredGlobalAssistant = configured.role === 'globalAssistant';
+      const configuredName = configured.name.trim();
+      const configuredModel = configured.model.trim();
+      const name =
+        retiredGlobalAssistant && configuredName === 'Global Assistant'
+          ? directoryLeaf(configured.workingDirectory) || `Session ${index + 1}`
+          : configuredName || `Session ${index + 1}`;
+
+      return {
+        ...defaultSession,
+        ...configured,
+        name,
+        role: 'project' as const,
+        executable: configured.executable.trim(),
+        model:
+          retiredGlobalAssistant && configuredModel.toLowerCase() === 'haiku'
+            ? ''
+            : canonicalModelOverride(configuredModel),
+        claudeSessionName: configured.claudeSessionName.trim(),
+        audio: {
+          ...defaultSession.audio,
+          ...configured.audio,
+        },
+      };
+    });
+  const focusedSessionId = sessions.some((session) => session.id === settings.focusedSessionId)
+    ? settings.focusedSessionId
+    : (sessions[0]?.id ?? defaults.focusedSessionId);
+
+  return {
+    ...defaults,
+    ...settings,
+    schemaVersion: SETTINGS_SCHEMA_VERSION,
+    sessions,
+    focusedSessionId,
+    audio: {
+      ...defaults.audio,
+      ...settings.audio,
+      quietHours: {
+        ...defaults.audio.quietHours,
+        ...settings.audio.quietHours,
+      },
+    },
+    auth: {
+      ...defaults.auth,
+      ...settings.auth,
+    },
+    notifications: {
+      ...defaults.notifications,
+      ...settings.notifications,
+    },
+  };
+}
+
+function canonicalModelOverride(model: string): string {
+  const alias = ['haiku', 'sonnet', 'opus'].find((candidate) => candidate === model.toLowerCase());
+  return alias ?? model;
+}
+
+export function createClaudeSessionName(name: string, id: SessionId): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 36);
+  const suffix =
+    id
+      .replace(/^session-/, '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 8) || 'local';
+  return `deck-${slug || 'session'}-${suffix}`;
+}
+
+function directoryLeaf(value: string) {
+  const parts = value.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) ?? '';
+}
+
+export function createAuthStateFromConfiguration(auth: AuthConfiguration): AuthStateSnapshot {
+  if (auth.provider === 'disabled') {
+    return {
+      provider: auth.provider,
+      status: 'notConfigured',
+      label: 'Authentication disabled',
+      details: 'Credential monitoring is disabled.',
+    };
+  }
+
+  if (!auth.checkExecutable.trim()) {
+    return {
+      provider: auth.provider,
+      status: 'notConfigured',
+      label: 'Authentication setup required',
+      details: 'Add a credential check command in Settings.',
+    };
+  }
+
+  return {
+    provider: auth.provider,
+    status: 'notConfigured',
+    label: 'Ready to verify',
+    details: 'Use the authentication button to validate credentials.',
   };
 }

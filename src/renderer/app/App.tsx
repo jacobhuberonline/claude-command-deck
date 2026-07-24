@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { buildClaudeCommand } from '../../shared/claude/ClaudeCommandBuilder';
-import { createPhaseOneState } from '../../shared/domain/defaults';
+import {
+  createClaudeSessionName,
+  createAuthStateFromConfiguration,
+  createDefaultRuntimeState,
+  createPhaseOneState,
+} from '../../shared/domain/defaults';
 import type {
   AppStateSnapshot,
   AuthCheckResult,
@@ -12,6 +16,7 @@ import type {
   NotificationPreferences,
   ProcessState,
   SessionAudioPreferences,
+  SessionConfiguration,
   SessionId,
   SessionLaunchMode,
   SettingsSection,
@@ -28,6 +33,7 @@ import {
 import { AudioService, defaultSoundRegistry } from '../services/audio/AudioService';
 import { DesktopNotificationService } from '../services/audio/DesktopNotificationService';
 import { getTerminalSize } from '../services/terminal/TerminalSizeRegistry';
+import { TerminalReplayStore } from '../services/terminal/TerminalReplayStore';
 import {
   parseClaudeUsageOutput,
   type ClaudeUsageSnapshot,
@@ -35,6 +41,15 @@ import {
 
 const fallbackBridge = {
   getAppState: () => Promise.resolve(createPhaseOneState('browser-preview')),
+  onShortcut: () => () => undefined,
+  addSession: () =>
+    Promise.resolve({
+      ok: false as const,
+      error: 'Desktop directory picker is not available.',
+      cancelled: true,
+    }),
+  removeSession: () =>
+    Promise.resolve({ ok: false as const, error: 'Desktop session storage is not available.' }),
   openDirectory: () =>
     Promise.resolve({ ok: false as const, error: 'Desktop shell is not available.' }),
   openLogDirectory: () =>
@@ -47,7 +62,10 @@ const fallbackBridge = {
     }),
   updateAuthConfiguration: () => Promise.resolve({ ok: true as const }),
   updateAudioPreferences: () => Promise.resolve({ ok: true as const }),
+  updateClaudeConfiguration: () => Promise.resolve({ ok: true as const }),
+  updateDeckPreferences: () => Promise.resolve({ ok: true as const }),
   updateNotificationPreferences: () => Promise.resolve({ ok: true as const }),
+  updateSessionConfiguration: () => Promise.resolve({ ok: true as const }),
   updateSessionAudioPreferences: () => Promise.resolve({ ok: true as const }),
   claude: {
     discover: (executable: string) =>
@@ -62,6 +80,8 @@ const fallbackBridge = {
           continueFlag: null,
           resumeSpecific: false,
           resumeFlag: null,
+          nameSession: false,
+          nameFlag: null,
         },
         error: 'Desktop Claude discovery is not available.',
         checkedAt: new Date().toISOString(),
@@ -88,6 +108,8 @@ const fallbackBridge = {
   terminal: {
     startShell: () =>
       Promise.resolve({ ok: false as const, error: 'Desktop shell is not available.' }),
+    prepareClaude: () =>
+      Promise.resolve({ ok: false as const, error: 'Desktop Claude is not available.' }),
     startClaude: () =>
       Promise.resolve({ ok: false as const, error: 'Desktop shell is not available.' }),
     write: () => Promise.resolve({ ok: false as const, error: 'Desktop shell is not available.' }),
@@ -97,6 +119,7 @@ const fallbackBridge = {
     onOutput: () => () => undefined,
     onExit: () => () => undefined,
     onState: () => () => undefined,
+    onConversationBinding: () => () => undefined,
   },
 } satisfies CommandDeckBridge;
 
@@ -115,6 +138,17 @@ const soundAssetNames = [
 const usageTrackerEnabled = false;
 const usageStorageKey = 'claude-command-deck:last-usage';
 const minimumAuthCheckIntervalSeconds = 30;
+const maxTerminalReplayBytes = 1024 * 1024;
+
+interface PreparedClaudeLaunch {
+  sessionId: SessionId;
+  launchMode: Exclude<SessionLaunchMode, 'custom'>;
+  planId: string;
+  strategy: 'new' | 'continueMostRecent' | 'resumeSpecific' | 'freshFallback';
+  allowFreshFallback: boolean;
+  allowAmbiguousContinue: boolean;
+  hasActiveProcess: boolean;
+}
 
 function getBridge() {
   return window.commandDeck ?? fallbackBridge;
@@ -135,7 +169,9 @@ function loadStoredUsage(): ClaudeUsageSnapshot | null {
 
 export function App() {
   const [appState, setAppState] = useState<AppStateSnapshot>(() => createPhaseOneState('loading'));
+  const [appStateLoaded, setAppStateLoaded] = useState(false);
   const [focusedSessionId, setFocusedSessionId] = useState<SessionId>('session-1');
+  const [terminalFocusRequest, setTerminalFocusRequest] = useState(0);
   const [focusMode, setFocusMode] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [authConsoleOpen, setAuthConsoleOpen] = useState(false);
@@ -145,7 +181,12 @@ export function App() {
   const activityClassifierRef = useRef(new ActivityClassifier());
   const audioServiceRef = useRef(new AudioService(defaultSoundRegistry));
   const notificationServiceRef = useRef(new DesktopNotificationService());
-  const [claudeDiscovery, setClaudeDiscovery] = useState<ClaudeDiscoverySnapshot>(() => ({
+  const terminalReplayStore = useMemo(() => new TerminalReplayStore(maxTerminalReplayBytes), []);
+  const awaitingClaudeReadyRef = useRef(new Set<SessionId>());
+  const sessionOperationRef = useRef(new Set<SessionId>());
+  const addSessionInFlightRef = useRef(false);
+  const addSessionRef = useRef<() => void>(() => undefined);
+  const [, setClaudeDiscovery] = useState<ClaudeDiscoverySnapshot>(() => ({
     executable: 'claude',
     resolvedPath: null,
     found: false,
@@ -156,6 +197,8 @@ export function App() {
       continueFlag: null,
       resumeSpecific: false,
       resumeFlag: null,
+      nameSession: false,
+      nameFlag: null,
     },
     error: null,
     checkedAt: new Date().toISOString(),
@@ -166,6 +209,9 @@ export function App() {
   const startupAuthAttemptedRef = useRef(false);
   const authRefreshStartInFlightRef = useRef(false);
   const appStateLoadedRef = useRef(false);
+  addSessionRef.current = () => {
+    void addSession();
+  };
 
   useEffect(() => {
     appStateRef.current = appState;
@@ -174,6 +220,20 @@ export function App() {
   useEffect(() => {
     focusedSessionIdRef.current = focusedSessionId;
   }, [focusedSessionId]);
+
+  useEffect(() => {
+    if (
+      !appStateLoadedRef.current ||
+      !appState.settings.sessions.some((session) => session.id === focusedSessionId)
+    ) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void bridge.updateDeckPreferences({ focusedSessionId, focusMode });
+    }, 120);
+    return () => window.clearTimeout(timeout);
+  }, [appState.settings.sessions, bridge, focusMode, focusedSessionId]);
 
   useEffect(() => {
     activityClassifierRef.current.configure({
@@ -202,6 +262,43 @@ export function App() {
             : session,
         ),
       }));
+    },
+    [],
+  );
+
+  const applyConversationBinding = useCallback(
+    (sessionId: SessionId, claudeSessionName: string | null) => {
+      setAppState((current) =>
+        markSameProjects({
+          ...current,
+          settings: {
+            ...current.settings,
+            sessions: current.settings.sessions.map((configuration) =>
+              configuration.id === sessionId
+                ? {
+                    ...configuration,
+                    claudeSessionName: claudeSessionName ?? '',
+                    hasNamedConversation: claudeSessionName !== null,
+                    launchMode: 'continueMostRecent',
+                  }
+                : configuration,
+            ),
+          },
+          sessions: current.sessions.map((session) =>
+            session.configuration.id === sessionId
+              ? {
+                  ...session,
+                  configuration: {
+                    ...session.configuration,
+                    claudeSessionName: claudeSessionName ?? '',
+                    hasNamedConversation: claudeSessionName !== null,
+                    launchMode: 'continueMostRecent',
+                  },
+                }
+              : session,
+          ),
+        }),
+      );
     },
     [],
   );
@@ -250,12 +347,13 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
 
-    void bridge.getAppState().then((snapshot) => {
-      if (!cancelled) {
-        const checkedAt = new Date().toISOString();
-        appStateLoadedRef.current = true;
-        setAppState(
-          markSameProjects({
+    void bridge
+      .getAppState()
+      .then((snapshot) => {
+        if (!cancelled) {
+          const checkedAt = new Date().toISOString();
+          appStateLoadedRef.current = true;
+          const loadedState = markSameProjects({
             ...snapshot,
             diagnostics: [
               ...snapshot.diagnostics.filter((diagnostic) => diagnostic.id !== 'desktop-bridge'),
@@ -269,12 +367,34 @@ export function App() {
                 checkedAt,
               },
             ],
-          }),
-        );
-        setFocusedSessionId(snapshot.settings.focusedSessionId);
-        setFocusMode(snapshot.settings.focusMode);
-      }
-    });
+          });
+          appStateRef.current = loadedState;
+          setAppState(loadedState);
+          setAppStateLoaded(true);
+          setFocusedSessionId(snapshot.settings.focusedSessionId);
+          setFocusMode(snapshot.settings.focusMode);
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        appStateLoadedRef.current = true;
+        setAppState((current) => ({
+          ...current,
+          diagnostics: [
+            ...current.diagnostics,
+            {
+              id: 'settings-load',
+              label: 'Settings load',
+              status: 'fail',
+              detail: error instanceof Error ? error.message : 'Unable to load saved settings.',
+              checkedAt: new Date().toISOString(),
+            },
+          ],
+        }));
+        setAppStateLoaded(true);
+      });
 
     return () => {
       cancelled = true;
@@ -284,31 +404,34 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
 
-    void bridge.claude.discover(appState.settings.claudeExecutable).then((discovery) => {
-      if (cancelled) {
-        return;
-      }
+    const timeout = window.setTimeout(() => {
+      void bridge.claude.discover(appState.settings.claudeExecutable).then((discovery) => {
+        if (cancelled) {
+          return;
+        }
 
-      setClaudeDiscovery(discovery);
-      setAppState((current) => ({
-        ...current,
-        diagnostics: [
-          ...current.diagnostics.filter((diagnostic) => diagnostic.id !== 'claude-executable'),
-          {
-            id: 'claude-executable',
-            label: 'Claude executable',
-            status: discovery.found ? 'pass' : 'warn',
-            detail: discovery.found
-              ? `${discovery.executable} resolved${discovery.version ? `: ${discovery.version}` : ''}`
-              : (discovery.error ?? 'Claude executable was not found.'),
-            checkedAt: discovery.checkedAt,
-          },
-        ],
-      }));
-    });
+        setClaudeDiscovery(discovery);
+        setAppState((current) => ({
+          ...current,
+          diagnostics: [
+            ...current.diagnostics.filter((diagnostic) => diagnostic.id !== 'claude-executable'),
+            {
+              id: 'claude-executable',
+              label: 'Claude executable',
+              status: discovery.found ? 'pass' : 'warn',
+              detail: discovery.found
+                ? `${discovery.executable} resolved${discovery.version ? `: ${discovery.version}` : ''}`
+                : (discovery.error ?? 'Claude executable was not found.'),
+              checkedAt: discovery.checkedAt,
+            },
+          ],
+        }));
+      });
+    }, 200);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeout);
     };
   }, [appState.settings.claudeExecutable, bridge]);
 
@@ -334,6 +457,7 @@ export function App() {
     });
 
     const offOutput = bridge.terminal.onOutput(({ sessionId, data }) => {
+      terminalReplayStore.append(sessionId, data);
       if (usageTrackerEnabled) {
         const usage = parseClaudeUsageOutput(data);
         if (usage) {
@@ -348,10 +472,14 @@ export function App() {
         ...activityPatch(activity),
       });
       emitSemanticEvents(activity.events, { sessionId });
+      if (awaitingClaudeReadyRef.current.delete(sessionId)) {
+        emitSemanticEvents(['session.ready'], { sessionId });
+      }
     });
 
     const offExit = bridge.terminal.onExit(({ sessionId, exitCode, crashed }) => {
       activityClassifierRef.current.clearSession(sessionId);
+      awaitingClaudeReadyRef.current.delete(sessionId);
       updateRuntime(sessionId, {
         processState: crashed ? 'crashed' : 'stopped',
         processType: undefined,
@@ -361,34 +489,31 @@ export function App() {
         statusMessage: crashed ? 'Process exited unexpectedly.' : 'Process stopped.',
       });
     });
-
-    void bridge.terminal.getSnapshots().then((snapshots) => {
-      snapshots.forEach((snapshot) => {
-        if (snapshot.sessionId) {
-          const patch: Partial<AppStateSnapshot['sessions'][number]['runtime']> & {
-            processState: ProcessState;
-          } = {
-            processState: snapshot.state,
-            processType: snapshot.type,
-            startedAt: snapshot.startedAt,
-            statusMessage: `Recovered active ${snapshot.type} after renderer load.`,
-          };
-
-          if (snapshot.lastOutputAt) {
-            patch.lastOutputAt = snapshot.lastOutputAt;
-          }
-
-          updateRuntime(snapshot.sessionId, patch);
-        }
-      });
-    });
+    const offConversationBinding = bridge.terminal.onConversationBinding(
+      ({ sessionId, claudeSessionName }) => {
+        applyConversationBinding(sessionId, claudeSessionName);
+      },
+    );
 
     return () => {
       offState();
       offOutput();
       offExit();
+      offConversationBinding();
     };
-  }, [bridge, emitSemanticEvents, updateRuntime]);
+  }, [applyConversationBinding, bridge, emitSemanticEvents, terminalReplayStore, updateRuntime]);
+
+  useEffect(
+    () =>
+      bridge.onShortcut((event) => {
+        if (event.shortcut === 'addSession') {
+          addSessionRef.current();
+        } else {
+          focusSessionSearch();
+        }
+      }),
+    [bridge],
+  );
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -438,32 +563,72 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || settingsSection !== null || authConsoleOpen) {
+        return;
+      }
+
       const target = event.target as HTMLElement | null;
-      const isTerminalInput = target?.closest('.xterm') !== null;
+      const isHtmlTarget = target instanceof HTMLElement;
+      const isTerminalInput = isHtmlTarget && target.closest('.xterm') !== null;
       const isTyping =
         !isTerminalInput &&
-        (target?.tagName === 'INPUT' ||
-          target?.tagName === 'TEXTAREA' ||
-          target?.isContentEditable === true);
+        isHtmlTarget &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable === true);
 
       if (isTyping) {
         return;
       }
 
-      if (event.altKey && ['1', '2', '3', '4'].includes(event.key)) {
+      const shortcutIndex = sessionShortcutIndex(event);
+      if (shortcutIndex !== null) {
         event.preventDefault();
-        const session = appState.sessions[Number(event.key) - 1];
+        const session = appState.sessions[shortcutIndex];
         if (session) {
           setFocusedSessionId(session.configuration.id);
         }
       }
 
-      if (event.altKey && event.key.toLowerCase() === 'f') {
+      if (isAltShortcut(event, 'f', 'KeyF')) {
         event.preventDefault();
         setFocusMode((current) => !current);
       }
 
-      if (event.altKey && event.key.toLowerCase() === ',') {
+      if (isAltShortcut(event, 'n', 'KeyN')) {
+        event.preventDefault();
+        addSessionRef.current();
+      }
+
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        (event.key.toLowerCase() === 'p' || event.code === 'KeyP')
+      ) {
+        event.preventDefault();
+        focusSessionSearch();
+      }
+
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        (event.key === 'PageUp' || event.key === 'PageDown')
+      ) {
+        event.preventDefault();
+        focusAdjacentSession(event.key === 'PageDown' ? 1 : -1);
+      }
+
+      if (isAltShortcut(event, 'a', 'KeyA')) {
+        const attentionSession = nextAttentionSession(
+          appState.sessions,
+          focusedSessionIdRef.current,
+        );
+        if (attentionSession) {
+          event.preventDefault();
+          setFocusedSessionId(attentionSession.configuration.id);
+        }
+      }
+
+      if (isAltShortcut(event, ',', 'Comma')) {
         event.preventDefault();
         setSettingsSection('general');
       }
@@ -471,7 +636,7 @@ export function App() {
 
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [appState.sessions]);
+  }, [appState.sessions, authConsoleOpen, settingsSection]);
 
   const focusedSession = useMemo(
     () =>
@@ -479,6 +644,118 @@ export function App() {
       appState.sessions[0],
     [appState.sessions, focusedSessionId],
   );
+
+  function focusAdjacentSession(direction: 1 | -1) {
+    const sessions = appStateRef.current.sessions;
+    if (sessions.length === 0) {
+      return;
+    }
+
+    const currentIndex = sessions.findIndex(
+      (session) => session.configuration.id === focusedSessionIdRef.current,
+    );
+    const nextIndex = (Math.max(0, currentIndex) + direction + sessions.length) % sessions.length;
+    const nextSession = sessions[nextIndex];
+    if (nextSession) {
+      setFocusedSessionId(nextSession.configuration.id);
+    }
+  }
+
+  function focusSessionSearch() {
+    setFocusMode(false);
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLInputElement>('.session-search input')?.focus();
+    });
+  }
+
+  async function addSession() {
+    if (addSessionInFlightRef.current) {
+      return;
+    }
+
+    addSessionInFlightRef.current = true;
+    try {
+      const result = await bridge.addSession();
+      if (!result.ok) {
+        if (!result.cancelled) {
+          addPreferenceDiagnostic('add-session', 'Add session', result.error);
+        }
+        return;
+      }
+
+      const runtime = {
+        ...createDefaultRuntimeState('stopped'),
+        activityState: 'idle' as const,
+        statusMessage: 'Configured and stopped.',
+      };
+      setAppState((current) =>
+        markSameProjects({
+          ...current,
+          settings: {
+            ...current.settings,
+            sessions: [...current.settings.sessions, result.configuration],
+            focusedSessionId: result.configuration.id,
+          },
+          sessions: [...current.sessions, { configuration: result.configuration, runtime }],
+        }),
+      );
+      setFocusedSessionId(result.configuration.id);
+      setFocusMode(false);
+    } finally {
+      addSessionInFlightRef.current = false;
+    }
+  }
+
+  async function removeSession(sessionId: SessionId) {
+    const session = appStateRef.current.sessions.find(
+      (candidate) => candidate.configuration.id === sessionId,
+    );
+    if (!session) {
+      return;
+    }
+    if (sessionOperationRef.current.has(sessionId)) {
+      addPreferenceDiagnostic(
+        'remove-session',
+        'Remove session',
+        'Wait for the current session operation to finish before removing it.',
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove "${session.configuration.name}" from the deck? Claude conversation history on disk is not deleted.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    const result = await bridge.removeSession({ sessionId });
+    if (!result.ok) {
+      addPreferenceDiagnostic('remove-session', 'Remove session', result.error);
+      return;
+    }
+
+    terminalReplayStore.clear(sessionId);
+    const remainingSessions = appStateRef.current.sessions.filter(
+      (candidate) => candidate.configuration.id !== sessionId,
+    );
+    const nextFocusedId =
+      focusedSessionIdRef.current === sessionId
+        ? (remainingSessions[0]?.configuration.id ?? focusedSessionIdRef.current)
+        : focusedSessionIdRef.current;
+    setFocusedSessionId(nextFocusedId);
+    setAppState((current) =>
+      markSameProjects({
+        ...current,
+        sessions: current.sessions.filter((candidate) => candidate.configuration.id !== sessionId),
+        settings: {
+          ...current.settings,
+          sessions: current.settings.sessions.filter((candidate) => candidate.id !== sessionId),
+          focusedSessionId: nextFocusedId,
+        },
+      }),
+    );
+  }
 
   async function updateAudioPreferences(preferences: AudioPreferences) {
     setAppState((current) => ({
@@ -496,33 +773,7 @@ export function App() {
   }
 
   async function updateAuthConfiguration(auth: AuthConfiguration) {
-    const authSummary =
-      auth.provider === 'disabled'
-        ? {
-            status: 'notConfigured' as const,
-            label: 'Authentication disabled',
-            details: 'Authentication monitoring is disabled.',
-          }
-        : auth.checkExecutable.trim()
-          ? {
-              status:
-                appStateRef.current.auth.status === 'notConfigured'
-                  ? ('notConfigured' as const)
-                  : appStateRef.current.auth.status,
-              label:
-                appStateRef.current.auth.status === 'notConfigured'
-                  ? 'Ready to check'
-                  : appStateRef.current.auth.label,
-              details:
-                appStateRef.current.auth.status === 'notConfigured'
-                  ? 'Click Check Connection to validate credentials.'
-                  : appStateRef.current.auth.details,
-            }
-          : {
-              status: 'notConfigured' as const,
-              label: 'AWS not configured',
-              details: 'Configure a credential check command in Settings.',
-            };
+    const authSummary = createAuthStateFromConfiguration(auth);
 
     setAppState((current) => ({
       ...current,
@@ -531,8 +782,6 @@ export function App() {
         auth,
       },
       auth: {
-        ...current.auth,
-        provider: auth.provider,
         ...authSummary,
       },
     }));
@@ -540,6 +789,26 @@ export function App() {
     const result = await bridge.updateAuthConfiguration({ auth });
     if (!result.ok) {
       addPreferenceDiagnostic('auth-configuration', 'Authentication configuration', result.error);
+    }
+  }
+
+  async function updateClaudeConfiguration(executable: string, baseArgs: string[]) {
+    const normalizedExecutable = executable.trim() || 'claude';
+    setAppState((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        claudeExecutable: normalizedExecutable,
+        claudeBaseArgs: baseArgs,
+      },
+    }));
+
+    const result = await bridge.updateClaudeConfiguration({
+      executable: normalizedExecutable,
+      baseArgs,
+    });
+    if (!result.ok) {
+      addPreferenceDiagnostic('claude-configuration', 'Claude configuration', result.error);
     }
   }
 
@@ -595,6 +864,35 @@ export function App() {
         'Session audio preferences',
         result.error,
       );
+    }
+  }
+
+  async function updateSessionConfiguration(configuration: SessionConfiguration) {
+    const nextConfiguration = normalizeSessionConfiguration(configuration);
+
+    setAppState((current) =>
+      markSameProjects({
+        ...current,
+        settings: {
+          ...current.settings,
+          sessions: current.settings.sessions.map((session) =>
+            session.id === nextConfiguration.id ? nextConfiguration : session,
+          ),
+        },
+        sessions: current.sessions.map((session) =>
+          session.configuration.id === nextConfiguration.id
+            ? {
+                ...session,
+                configuration: nextConfiguration,
+              }
+            : session,
+        ),
+      }),
+    );
+
+    const result = await bridge.updateSessionConfiguration({ configuration: nextConfiguration });
+    if (!result.ok) {
+      addPreferenceDiagnostic('session-configuration', 'Session configuration', result.error);
     }
   }
 
@@ -671,10 +969,32 @@ export function App() {
     }));
   }
 
-  async function startShell(sessionId: SessionId) {
-    const session = appState.sessions.find((candidate) => candidate.configuration.id === sessionId);
+  async function withSessionOperation(
+    sessionId: SessionId,
+    operation: () => Promise<boolean>,
+  ): Promise<boolean> {
+    if (sessionOperationRef.current.has(sessionId)) {
+      return false;
+    }
+
+    sessionOperationRef.current.add(sessionId);
+    try {
+      return await operation();
+    } finally {
+      sessionOperationRef.current.delete(sessionId);
+    }
+  }
+
+  async function startShell(sessionId: SessionId): Promise<boolean> {
+    return withSessionOperation(sessionId, () => startShellUnlocked(sessionId));
+  }
+
+  async function startShellUnlocked(sessionId: SessionId): Promise<boolean> {
+    const session = appStateRef.current.sessions.find(
+      (candidate) => candidate.configuration.id === sessionId,
+    );
     if (!session) {
-      return;
+      return false;
     }
 
     updateRuntime(sessionId, {
@@ -684,6 +1004,7 @@ export function App() {
       activityState: 'unknown',
       attention: false,
     });
+    terminalReplayStore.clear(sessionId);
 
     const terminalSize = getTerminalSize(sessionId);
     const result = await bridge.terminal.startShell({
@@ -701,64 +1022,125 @@ export function App() {
         activityState: 'unknown',
         attention: true,
       });
-    }
-  }
-
-  async function launchClaude(
-    sessionId: SessionId,
-    launchMode: Exclude<SessionLaunchMode, 'custom'>,
-  ): Promise<boolean> {
-    const session = appState.sessions.find((candidate) => candidate.configuration.id === sessionId);
-    if (!session) {
       return false;
     }
+    return true;
+  }
 
-    const command = buildClaudeCommand({
-      executable: session.configuration.executable || appState.settings.claudeExecutable,
-      baseArgs: session.configuration.args.length
-        ? session.configuration.args
-        : appState.settings.claudeBaseArgs,
-      launchMode,
-      capabilities: claudeDiscovery.capabilities,
+  async function prepareClaudeLaunch(
+    sessionId: SessionId,
+    launchMode: Exclude<SessionLaunchMode, 'custom'>,
+    options: { interactive?: boolean } = {},
+  ): Promise<PreparedClaudeLaunch | null> {
+    if (
+      !appStateRef.current.sessions.some((candidate) => candidate.configuration.id === sessionId)
+    ) {
+      return null;
+    }
+
+    updateRuntime(sessionId, {
+      statusMessage: 'Checking the configured Claude executable.',
+      attention: false,
     });
 
-    if (command.strategy === 'freshFallback' && launchMode !== 'new') {
+    const plan = await bridge.terminal.prepareClaude({ sessionId, launchMode });
+    if (!plan.ok) {
+      updateRuntime(sessionId, {
+        statusMessage: plan.error,
+        attention: true,
+      });
+      return null;
+    }
+
+    let allowFreshFallback = false;
+    let allowAmbiguousContinue = false;
+
+    if (plan.requiresAmbiguousContinueConsent) {
+      if (options.interactive === false) {
+        updateRuntime(sessionId, {
+          statusMessage:
+            'Skipped: this shared directory requires confirmation before continue-most-recent.',
+          attention: true,
+        });
+        return null;
+      }
+
+      const confirmed = window.confirm(
+        'This directory is used by more than one session. Claude may continue the directory’s most recent conversation rather than this session. Continue?',
+      );
+      if (!confirmed) {
+        updateRuntime(sessionId, {
+          statusMessage: 'Continue cancelled for a shared directory.',
+        });
+        return null;
+      }
+      allowAmbiguousContinue = true;
+    }
+
+    if (plan.requiresFreshFallbackConsent) {
+      if (options.interactive === false) {
+        updateRuntime(sessionId, {
+          statusMessage: 'Skipped because this Claude CLI cannot continue a conversation.',
+          attention: true,
+        });
+        return null;
+      }
+
       const confirmed = window.confirm(
         'The installed Claude CLI does not report a supported continuation flag. Use a fresh restart instead?',
       );
       if (!confirmed) {
         updateRuntime(sessionId, {
-          processState: 'stopped',
           statusMessage: 'Reload & Continue cancelled because continuation is unsupported.',
         });
-        return false;
+        return null;
       }
+      allowFreshFallback = true;
     }
 
+    return {
+      sessionId,
+      launchMode,
+      planId: plan.planId,
+      strategy: plan.strategy,
+      allowFreshFallback,
+      allowAmbiguousContinue,
+      hasActiveProcess: plan.hasActiveProcess,
+    };
+  }
+
+  async function launchPreparedClaude(prepared: PreparedClaudeLaunch): Promise<boolean> {
+    const { sessionId, launchMode, planId, strategy, allowFreshFallback, allowAmbiguousContinue } =
+      prepared;
     updateRuntime(sessionId, {
       processState: 'starting',
       processType: 'claudeSession',
       statusMessage:
-        command.strategy === 'continueMostRecent'
+        strategy === 'continueMostRecent'
           ? 'Starting Claude Code with continue-most-recent strategy.'
-          : command.strategy === 'resumeSpecific'
+          : strategy === 'resumeSpecific'
             ? 'Starting Claude Code resume picker.'
             : 'Starting Claude Code.',
       activityState: 'unknown',
       attention: false,
     });
+    awaitingClaudeReadyRef.current.add(sessionId);
+    if (launchMode === 'new') {
+      terminalReplayStore.clear(sessionId);
+    }
 
     const terminalSize = getTerminalSize(sessionId);
     const result = await bridge.terminal.startClaude({
       sessionId,
-      workingDirectory: session.configuration.workingDirectory,
-      executable: command.executable,
-      args: command.args,
+      planId,
+      allowFreshFallback,
+      allowAmbiguousContinue,
       cols: terminalSize.cols,
       rows: terminalSize.rows,
     });
 
     if (!result.ok) {
+      awaitingClaudeReadyRef.current.delete(sessionId);
       updateRuntime(sessionId, {
         processState: 'error',
         processType: undefined,
@@ -770,14 +1152,10 @@ export function App() {
       return false;
     }
 
-    if (result.ok && command.warnings.length > 0) {
+    if (result.warnings.length > 0) {
       updateRuntime(sessionId, {
-        statusMessage: command.warnings.join(' '),
+        statusMessage: result.warnings.join(' '),
       });
-    }
-
-    if (launchMode === 'new') {
-      emitSemanticEvents(['session.ready'], { sessionId });
     }
 
     return true;
@@ -787,25 +1165,27 @@ export function App() {
     sessionId: SessionId,
     options: { skipConfirm?: boolean; emitSessionEvent?: boolean } = {},
   ): Promise<boolean> {
-    const session = appState.sessions.find((candidate) => candidate.configuration.id === sessionId);
+    const session = appStateRef.current.sessions.find(
+      (candidate) => candidate.configuration.id === sessionId,
+    );
     if (!session) {
       return false;
     }
 
-    if (
-      !options.skipConfirm &&
-      session.runtime.sameProject &&
-      !claudeDiscovery.capabilities.resumeSpecific
-    ) {
-      const confirmed = window.confirm(
-        'This directory is used by more than one bay. The CLI may continue the most recent conversation for the directory rather than this exact bay. Continue?',
-      );
-      if (!confirmed) {
-        return false;
-      }
+    const prepared = await prepareClaudeLaunch(sessionId, 'continueMostRecent', {
+      interactive: !options.skipConfirm,
+    });
+    if (!prepared) {
+      return false;
     }
 
-    if (!options.skipConfirm && isBusy(session.runtime.activityState)) {
+    const preparedSession = appStateRef.current.sessions.find(
+      (candidate) => candidate.configuration.id === sessionId,
+    );
+    if (!preparedSession) {
+      return false;
+    }
+    if (!options.skipConfirm && isBusy(preparedSession.runtime.activityState)) {
       const confirmed = window.confirm(
         'This session may be busy or awaiting input. Restart it now?',
       );
@@ -814,9 +1194,10 @@ export function App() {
       }
     }
 
-    await stopForRestart(sessionId);
-    await delay(350);
-    const launched = await launchClaude(sessionId, 'continueMostRecent');
+    if (!(await stopForRestart(prepared))) {
+      return false;
+    }
+    const launched = await launchPreparedClaude(prepared);
     if (launched && options.emitSessionEvent !== false) {
       emitSemanticEvents(['session.reload_completed'], { sessionId });
     }
@@ -824,12 +1205,25 @@ export function App() {
   }
 
   async function startNewClaude(sessionId: SessionId): Promise<boolean> {
-    const session = appState.sessions.find((candidate) => candidate.configuration.id === sessionId);
+    const session = appStateRef.current.sessions.find(
+      (candidate) => candidate.configuration.id === sessionId,
+    );
     if (!session) {
       return false;
     }
 
-    if (isBusy(session.runtime.activityState)) {
+    const prepared = await prepareClaudeLaunch(sessionId, 'new');
+    if (!prepared) {
+      return false;
+    }
+
+    const preparedSession = appStateRef.current.sessions.find(
+      (candidate) => candidate.configuration.id === sessionId,
+    );
+    if (!preparedSession) {
+      return false;
+    }
+    if (isBusy(preparedSession.runtime.activityState)) {
       const confirmed = window.confirm(
         'This session may be busy or awaiting input. Start a fresh conversation now?',
       );
@@ -838,35 +1232,52 @@ export function App() {
       }
     }
 
-    if (session.runtime.processState !== 'empty' && session.runtime.processState !== 'stopped') {
-      await stopForRestart(sessionId);
-      await delay(350);
+    if (prepared.hasActiveProcess) {
+      if (!(await stopForRestart(prepared))) {
+        return false;
+      }
     }
 
-    return launchClaude(sessionId, 'new');
+    return launchPreparedClaude(prepared);
   }
 
-  async function launchFromMode(sessionId: SessionId, launchMode: SessionLaunchMode) {
-    if (launchMode === 'continueMostRecent') {
-      await reloadContinue(sessionId);
-      return;
-    }
+  async function launchFromMode(
+    sessionId: SessionId,
+    launchMode: SessionLaunchMode,
+  ): Promise<boolean> {
+    return withSessionOperation(sessionId, async () => {
+      if (launchMode === 'continueMostRecent') {
+        return reloadContinue(sessionId);
+      }
 
-    if (launchMode === 'resumeSpecific') {
-      await resumeClaude(sessionId);
-      return;
-    }
+      if (launchMode === 'resumeSpecific') {
+        return resumeClaude(sessionId);
+      }
 
-    await startNewClaude(sessionId);
+      return startNewClaude(sessionId);
+    });
   }
 
   async function resumeClaude(sessionId: SessionId): Promise<boolean> {
-    const session = appState.sessions.find((candidate) => candidate.configuration.id === sessionId);
+    const session = appStateRef.current.sessions.find(
+      (candidate) => candidate.configuration.id === sessionId,
+    );
     if (!session) {
       return false;
     }
 
-    if (isBusy(session.runtime.activityState)) {
+    const prepared = await prepareClaudeLaunch(sessionId, 'resumeSpecific');
+    if (!prepared) {
+      return false;
+    }
+
+    const preparedSession = appStateRef.current.sessions.find(
+      (candidate) => candidate.configuration.id === sessionId,
+    );
+    if (!preparedSession) {
+      return false;
+    }
+    if (isBusy(preparedSession.runtime.activityState)) {
       const confirmed = window.confirm(
         'This session may be busy or awaiting input. Open the Claude resume picker now?',
       );
@@ -875,21 +1286,25 @@ export function App() {
       }
     }
 
-    await stopForRestart(sessionId);
-    await delay(350);
-    return launchClaude(sessionId, 'resumeSpecific');
+    if (!(await stopForRestart(prepared))) {
+      return false;
+    }
+    return launchPreparedClaude(prepared);
   }
 
   async function reloadAll() {
     const candidates = appState.sessions.filter(
-      (session) => session.configuration.workingDirectory,
+      (session) =>
+        session.configuration.workingDirectory &&
+        session.runtime.processState === 'running' &&
+        session.runtime.processType === 'claudeSession',
     );
     if (candidates.length === 0) {
       return;
     }
 
     const confirmed = window.confirm(
-      `Reload & Continue ${candidates.length} configured session${candidates.length === 1 ? '' : 's'} in sequence?`,
+      `Restart ${candidates.length} active Claude session${candidates.length === 1 ? '' : 's'} in sequence?`,
     );
     if (!confirmed) {
       return;
@@ -897,10 +1312,12 @@ export function App() {
 
     let failures = 0;
     for (const session of candidates) {
-      const ok = await reloadContinue(session.configuration.id, {
-        skipConfirm: true,
-        emitSessionEvent: false,
-      });
+      const ok = await withSessionOperation(session.configuration.id, () =>
+        reloadContinue(session.configuration.id, {
+          skipConfirm: true,
+          emitSessionEvent: false,
+        }),
+      );
       if (!ok) {
         failures += 1;
       }
@@ -910,13 +1327,34 @@ export function App() {
     emitSemanticEvents([failures === 0 ? 'reload_all.completed' : 'reload_all.partially_failed']);
   }
 
-  async function stopForRestart(sessionId: SessionId) {
-    await bridge.terminal.stop({ sessionId });
+  async function stopForRestart(prepared: PreparedClaudeLaunch): Promise<boolean> {
+    const { sessionId, planId, hasActiveProcess } = prepared;
+    if (hasActiveProcess) {
+      const stopResult = await bridge.terminal.stop({ sessionId, planId });
+      if (!stopResult.ok) {
+        updateRuntime(sessionId, {
+          processState: 'error',
+          statusMessage: stopResult.error,
+          attention: true,
+        });
+        return false;
+      }
+      if (!(await waitForSessionExit(bridge, sessionId))) {
+        updateRuntime(sessionId, {
+          processState: 'error',
+          statusMessage: 'The previous process did not stop in time.',
+          attention: true,
+        });
+        return false;
+      }
+    }
+
     updateRuntime(sessionId, {
       processState: 'restarting',
       processType: 'claudeSession',
       statusMessage: 'Restarting Claude Code so startup-loaded configuration can be reread.',
     });
+    return true;
   }
 
   async function selectDirectory(sessionId: SessionId) {
@@ -924,7 +1362,6 @@ export function App() {
     if (!result.ok) {
       if (!result.cancelled) {
         updateRuntime(sessionId, {
-          processState: 'error',
           statusMessage: result.error,
           attention: true,
         });
@@ -932,18 +1369,35 @@ export function App() {
       return;
     }
 
-    setAppState((current) =>
-      markSameProjects({
+    setAppState((current) => {
+      const configuration = current.settings.sessions.find((session) => session.id === sessionId);
+      if (!configuration) {
+        return current;
+      }
+
+      const name = directoryLeaf(result.directory);
+      const nextConfiguration: SessionConfiguration = {
+        ...configuration,
+        workingDirectory: result.directory,
+        name,
+        claudeSessionName: createClaudeSessionName(name, configuration.id),
+        hasNamedConversation: false,
+        launchMode: 'new',
+      };
+      terminalReplayStore.clear(sessionId);
+      return markSameProjects({
         ...current,
+        settings: {
+          ...current.settings,
+          sessions: current.settings.sessions.map((session) =>
+            session.id === sessionId ? nextConfiguration : session,
+          ),
+        },
         sessions: current.sessions.map((session) =>
           session.configuration.id === sessionId
             ? {
                 ...session,
-                configuration: {
-                  ...session.configuration,
-                  workingDirectory: result.directory,
-                  name: directoryLeaf(result.directory),
-                },
+                configuration: nextConfiguration,
                 runtime: {
                   ...session.runtime,
                   processState: 'stopped',
@@ -955,15 +1409,14 @@ export function App() {
               }
             : session,
         ),
-      }),
-    );
+      });
+    });
   }
 
   async function openSessionDirectory(sessionId: SessionId) {
     const result = await bridge.openDirectory({ sessionId });
     if (!result.ok) {
       updateRuntime(sessionId, {
-        processState: 'error',
         statusMessage: result.error,
         attention: true,
       });
@@ -980,7 +1433,6 @@ export function App() {
     if (!result.ok) {
       updateRuntime(sessionId, {
         processState: 'error',
-        processType: undefined,
         statusMessage: result.error,
         attention: true,
       });
@@ -1007,8 +1459,7 @@ export function App() {
         ...current.auth,
         status: result.status,
         label: authLabel(result.status),
-        details:
-          result.error ?? formatSafeIdentity(result.safeIdentity) ?? 'Credential check completed.',
+        details: result.error ?? formatSafeIdentity(result.safeIdentity) ?? 'Credentials verified.',
         safeIdentity: result.safeIdentity,
         lastCheckedAt: result.checkedAt,
         lastSuccessfulCheckAt:
@@ -1037,13 +1488,14 @@ export function App() {
 
     try {
       if (!isAuthRefreshConfigured(auth)) {
+        setSettingsSection('authentication');
         setAppState((current) => ({
           ...current,
           auth: {
             ...current.auth,
             status: 'disconnected',
-            label: 'Disconnected',
-            details: 'Credential refresh command is not configured.',
+            label: 'Login unavailable',
+            details: 'Add a credential login command in Settings.',
           },
         }));
         return;
@@ -1055,8 +1507,8 @@ export function App() {
         auth: {
           ...current.auth,
           status: 'refreshing',
-          label: 'Refreshing',
-          details: 'Starting credential refresh.',
+          label: 'Logging in',
+          details: 'Starting credential login.',
         },
       }));
 
@@ -1082,7 +1534,7 @@ export function App() {
           ...current.auth,
           status: 'error',
           label: 'Authentication error',
-          details: error instanceof Error ? error.message : 'Unable to start credential refresh.',
+          details: error instanceof Error ? error.message : 'Unable to start credential login.',
         },
       }));
     } finally {
@@ -1151,6 +1603,33 @@ export function App() {
   ]);
 
   useEffect(() => {
+    if (!appStateLoaded) {
+      return;
+    }
+
+    void bridge.terminal.getSnapshots().then((snapshots) => {
+      snapshots.forEach((snapshot) => {
+        if (snapshot.sessionId) {
+          const patch: Partial<AppStateSnapshot['sessions'][number]['runtime']> & {
+            processState: ProcessState;
+          } = {
+            processState: snapshot.state,
+            processType: snapshot.type,
+            startedAt: snapshot.startedAt,
+            statusMessage: `Recovered active ${snapshot.type} after renderer load.`,
+          };
+
+          if (snapshot.lastOutputAt) {
+            patch.lastOutputAt = snapshot.lastOutputAt;
+          }
+
+          updateRuntime(snapshot.sessionId, patch);
+        }
+      });
+    });
+  }, [appStateLoaded, bridge, updateRuntime]);
+
+  useEffect(() => {
     const checkIfStale = () => {
       if (!appStateLoadedRef.current || document.visibilityState === 'hidden') {
         return;
@@ -1208,6 +1687,15 @@ export function App() {
     });
   }, [bridge, checkConnection]);
 
+  if (!appStateLoaded) {
+    return (
+      <div className="app-loading" role="status" aria-live="polite">
+        <strong>Claude Command Deck</strong>
+        <span>Loading saved sessions…</span>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <CommandBar
@@ -1219,6 +1707,9 @@ export function App() {
         audio={appState.settings.audio}
         onOpenSettings={() => setSettingsSection('general')}
         onToggleFocusMode={() => setFocusMode((current) => !current)}
+        onAddSession={() => {
+          void addSession();
+        }}
         onReloadAll={() => {
           void reloadAll();
         }}
@@ -1238,7 +1729,14 @@ export function App() {
           focusedSessionId={focusedSession?.configuration.id ?? focusedSessionId}
           focusMode={focusMode}
           onFocusSession={setFocusedSessionId}
+          onRequestTerminalFocus={() => setTerminalFocusRequest((current) => current + 1)}
           onToggleFocusMode={() => setFocusMode((current) => !current)}
+          onAddSession={() => {
+            void addSession();
+          }}
+          onRemoveSession={(sessionId) => {
+            void removeSession(sessionId);
+          }}
           onOpenSettings={() => setSettingsSection('claude')}
           onStartShell={(sessionId) => {
             void startShell(sessionId);
@@ -1255,13 +1753,20 @@ export function App() {
           onStopSession={(sessionId) => {
             void stopSession(sessionId);
           }}
+          onUpdateSessionConfiguration={(configuration) => {
+            void updateSessionConfiguration(configuration);
+          }}
           terminalBridge={bridge.terminal}
+          terminalFocusRequest={terminalFocusRequest}
+          terminalReplayStore={terminalReplayStore}
         />
       </main>
       <footer className="bottom-status" aria-label="Application status">
         <span>{focusedSession?.configuration.name ?? 'No focused session'}</span>
-        <span>Alt+1-4 focus bays</span>
-        <span>Alt+F focus mode</span>
+        <span>Alt+1…9 jump</span>
+        <span>Ctrl+PgUp/PgDn cycle</span>
+        <span>Ctrl+Shift+P find</span>
+        <span>Alt+N add</span>
         <span>v{appState.appVersion}</span>
       </footer>
       <SettingsPanel
@@ -1272,14 +1777,23 @@ export function App() {
         onUpdateAuthConfiguration={(auth) => {
           void updateAuthConfiguration(auth);
         }}
+        onUpdateClaudeConfiguration={(executable, baseArgs) => {
+          void updateClaudeConfiguration(executable, baseArgs);
+        }}
         onUpdateAudioPreferences={(preferences) => {
           void updateAudioPreferences(preferences);
         }}
         onUpdateNotificationPreferences={(preferences) => {
           void updateNotificationPreferences(preferences);
         }}
+        onUpdateSessionConfiguration={(configuration) => {
+          void updateSessionConfiguration(configuration);
+        }}
         onUpdateSessionAudioPreferences={(sessionId, preferences) => {
           void updateSessionAudioPreferences(sessionId, preferences);
+        }}
+        onSelectDirectory={(sessionId) => {
+          void selectDirectory(sessionId);
         }}
         onTestAudio={(event) => {
           emitSemanticEvents([event], { forceAudio: true });
@@ -1322,6 +1836,88 @@ function markSameProjects(snapshot: AppStateSnapshot): AppStateSnapshot {
       };
     }),
   };
+}
+
+function sessionShortcutIndex(event: KeyboardEvent): number | null {
+  if (!event.altKey || event.ctrlKey || event.metaKey || event.getModifierState('AltGraph')) {
+    return null;
+  }
+
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  const codes = [
+    'Digit1',
+    'Digit2',
+    'Digit3',
+    'Digit4',
+    'Digit5',
+    'Digit6',
+    'Digit7',
+    'Digit8',
+    'Digit9',
+  ];
+  const keyIndex = keys.indexOf(event.key);
+  if (keyIndex >= 0) {
+    return keyIndex;
+  }
+
+  const codeIndex = codes.indexOf(event.code);
+  return codeIndex >= 0 ? codeIndex : null;
+}
+
+function isAltShortcut(event: KeyboardEvent, key: string, code: string): boolean {
+  return (
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.getModifierState('AltGraph') &&
+    (event.key.toLowerCase() === key || event.code === code)
+  );
+}
+
+function normalizeSessionConfiguration(configuration: SessionConfiguration): SessionConfiguration {
+  const model = configuration.model.trim();
+  const canonicalModel = ['haiku', 'sonnet', 'opus'].find(
+    (candidate) => candidate === model.toLowerCase(),
+  );
+  return {
+    ...configuration,
+    name: configuration.name.trim() || 'Untitled session',
+    role: 'project',
+    executable: configuration.executable.trim(),
+    model: canonicalModel ?? model,
+    claudeSessionName: configuration.hasNamedConversation
+      ? configuration.claudeSessionName.trim() ||
+        createClaudeSessionName(configuration.name, configuration.id)
+      : createClaudeSessionName(configuration.name, configuration.id),
+  };
+}
+
+function nextAttentionSession(sessions: AppStateSnapshot['sessions'], focusedSessionId: SessionId) {
+  const currentIndex = sessions.findIndex(
+    (session) => session.configuration.id === focusedSessionId,
+  );
+  for (let offset = 1; offset <= sessions.length; offset += 1) {
+    const candidate = sessions[(Math.max(0, currentIndex) + offset) % sessions.length];
+    if (candidate?.runtime.attention) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+async function waitForSessionExit(
+  bridge: CommandDeckBridge,
+  sessionId: SessionId,
+): Promise<boolean> {
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    const snapshots = await bridge.terminal.getSnapshots();
+    if (!snapshots.some((snapshot) => snapshot.sessionId === sessionId)) {
+      return true;
+    }
+    await delay(50);
+  }
+  return false;
 }
 
 function activityPatch(activity: ActivityClassification) {
@@ -1461,11 +2057,11 @@ function authLabel(status: AppStateSnapshot['auth']['status']) {
     case 'error':
       return 'Authentication error';
     case 'refreshing':
-      return 'Refreshing';
+      return 'Logging in';
     case 'expiringSoon':
       return 'Expiring soon';
     case 'notConfigured':
-      return 'Not configured';
+      return 'Authentication setup required';
   }
 }
 

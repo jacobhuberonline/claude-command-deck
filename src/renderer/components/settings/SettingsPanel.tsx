@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { FolderPen, X } from 'lucide-react';
 import type {
   AppStateSnapshot,
   AuthConfiguration,
@@ -7,6 +7,7 @@ import type {
   AudioPreferences,
   NotificationPreferences,
   SessionAudioPreferences,
+  SessionConfiguration,
   SessionId,
   SettingsSection,
 } from '../../../shared/domain/types';
@@ -18,12 +19,15 @@ interface SettingsPanelProps {
   onSelectSection: (section: SettingsSection) => void;
   onClose: () => void;
   onUpdateAuthConfiguration: (auth: AuthConfiguration) => void;
+  onUpdateClaudeConfiguration: (executable: string, baseArgs: string[]) => void;
   onUpdateAudioPreferences: (preferences: AudioPreferences) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
+  onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
   onUpdateSessionAudioPreferences: (
     sessionId: SessionId,
     preferences: SessionAudioPreferences,
   ) => void;
+  onSelectDirectory: (sessionId: SessionId) => void;
   onTestAudio: (event: AudioEvent) => void;
   onRerunDiagnostics: () => void;
   onOpenLogDirectory: () => void;
@@ -46,9 +50,12 @@ export function SettingsPanel({
   onSelectSection,
   onClose,
   onUpdateAuthConfiguration,
+  onUpdateClaudeConfiguration,
   onUpdateAudioPreferences,
   onUpdateNotificationPreferences,
+  onUpdateSessionConfiguration,
   onUpdateSessionAudioPreferences,
+  onSelectDirectory,
   onTestAudio,
   onRerunDiagnostics,
   onOpenLogDirectory,
@@ -97,9 +104,12 @@ export function SettingsPanel({
               appState={appState}
               section={section}
               onUpdateAuthConfiguration={onUpdateAuthConfiguration}
+              onUpdateClaudeConfiguration={onUpdateClaudeConfiguration}
               onUpdateAudioPreferences={onUpdateAudioPreferences}
               onUpdateNotificationPreferences={onUpdateNotificationPreferences}
+              onUpdateSessionConfiguration={onUpdateSessionConfiguration}
               onUpdateSessionAudioPreferences={onUpdateSessionAudioPreferences}
+              onSelectDirectory={onSelectDirectory}
               onTestAudio={onTestAudio}
               onRerunDiagnostics={onRerunDiagnostics}
               onOpenLogDirectory={onOpenLogDirectory}
@@ -116,8 +126,11 @@ function SettingsSectionContent({
   section,
   onUpdateAudioPreferences,
   onUpdateAuthConfiguration,
+  onUpdateClaudeConfiguration,
   onUpdateNotificationPreferences,
+  onUpdateSessionConfiguration,
   onUpdateSessionAudioPreferences,
+  onSelectDirectory,
   onTestAudio,
   onRerunDiagnostics,
   onOpenLogDirectory,
@@ -126,15 +139,33 @@ function SettingsSectionContent({
   section: SettingsSection;
   onUpdateAudioPreferences: (preferences: AudioPreferences) => void;
   onUpdateAuthConfiguration: (auth: AuthConfiguration) => void;
+  onUpdateClaudeConfiguration: (executable: string, baseArgs: string[]) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
+  onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
   onUpdateSessionAudioPreferences: (
     sessionId: SessionId,
     preferences: SessionAudioPreferences,
   ) => void;
+  onSelectDirectory: (sessionId: SessionId) => void;
   onTestAudio: (event: AudioEvent) => void;
   onRerunDiagnostics: () => void;
   onOpenLogDirectory: () => void;
 }) {
+  if (section === 'general') {
+    return <GeneralSettings appState={appState} />;
+  }
+
+  if (section === 'claude') {
+    return (
+      <ClaudeSettings
+        appState={appState}
+        onUpdateClaudeConfiguration={onUpdateClaudeConfiguration}
+        onUpdateSessionConfiguration={onUpdateSessionConfiguration}
+        onSelectDirectory={onSelectDirectory}
+      />
+    );
+  }
+
   if (section === 'authentication') {
     return (
       <AuthenticationSettings auth={appState.settings.auth} onUpdate={onUpdateAuthConfiguration} />
@@ -202,6 +233,128 @@ function SettingsSectionContent({
   );
 }
 
+function GeneralSettings({ appState }: { appState: AppStateSnapshot }) {
+  return (
+    <>
+      <h3>Session management</h3>
+      <Field label="Saved sessions" value={String(appState.sessions.length)} />
+      <Field label="Quick switch" value="Alt+1…9 or Ctrl+PageUp / Ctrl+PageDown" />
+      <Field label="Find sessions" value="Ctrl+Shift+P" />
+      <Field label="Add a directory" value="Alt+N" />
+      <Field
+        label="Terminal transcripts"
+        value="Buffered in memory for switching; never persisted"
+      />
+    </>
+  );
+}
+
+function ClaudeSettings({
+  appState,
+  onUpdateClaudeConfiguration,
+  onUpdateSessionConfiguration,
+  onSelectDirectory,
+}: {
+  appState: AppStateSnapshot;
+  onUpdateClaudeConfiguration: (executable: string, baseArgs: string[]) => void;
+  onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
+  onSelectDirectory: (sessionId: SessionId) => void;
+}) {
+  return (
+    <>
+      <h3>Claude Code</h3>
+      <TextField
+        label="Default executable"
+        value={appState.settings.claudeExecutable}
+        placeholder="claude"
+        onChange={(executable) =>
+          onUpdateClaudeConfiguration(executable, appState.settings.claudeBaseArgs)
+        }
+      />
+      <ArgsField
+        label="Default launch arguments"
+        value={appState.settings.claudeBaseArgs}
+        placeholder={'--permission-mode\nacceptEdits'}
+        onChange={(baseArgs) =>
+          onUpdateClaudeConfiguration(appState.settings.claudeExecutable, baseArgs)
+        }
+      />
+      <p className="settings-hint">
+        Models are optional. A blank session model adds no per-session override; default launch
+        arguments and Claude configuration still apply. New conversations are named so this deck can
+        resume the exact conversation later.
+      </p>
+      <div className="session-profile-list">
+        {appState.sessions.map((session) => {
+          const configuration = session.configuration;
+          const processActive =
+            ['starting', 'running', 'restarting', 'stopping'].includes(
+              session.runtime.processState,
+            ) ||
+            (session.runtime.processState === 'error' && session.runtime.processType !== undefined);
+          const update = (patch: Partial<SessionConfiguration>) =>
+            onUpdateSessionConfiguration({ ...configuration, ...patch });
+          return (
+            <section className="session-profile" key={configuration.id}>
+              <header>
+                <strong>{configuration.name}</strong>
+                <span>
+                  {configuration.hasNamedConversation
+                    ? 'Named conversation'
+                    : configuration.launchMode === 'continueMostRecent'
+                      ? 'Legacy directory conversation'
+                      : 'Not started'}
+                </span>
+              </header>
+              <TextField
+                label="Display name"
+                value={configuration.name}
+                onChange={(name) => update({ name })}
+              />
+              <TextField
+                label="Model override"
+                value={configuration.model}
+                placeholder="Default, haiku, sonnet, opus, or full model ID"
+                onChange={(model) => update({ model })}
+              />
+              <TextField
+                label="Executable override"
+                value={configuration.executable}
+                placeholder={`Inherit ${appState.settings.claudeExecutable}`}
+                onChange={(executable) => update({ executable })}
+              />
+              <div className="settings-field settings-field-stack">
+                <span>Working directory</span>
+                <div className="settings-inline-row">
+                  <strong>{configuration.workingDirectory || 'No directory selected'}</strong>
+                  <button
+                    className="control-button"
+                    type="button"
+                    disabled={processActive}
+                    title={
+                      processActive
+                        ? 'Stop the attached process before changing directory'
+                        : 'Change working directory'
+                    }
+                    onClick={() => onSelectDirectory(configuration.id)}
+                  >
+                    <FolderPen size={15} aria-hidden="true" />
+                    <span>Change</span>
+                  </button>
+                </div>
+              </div>
+              <Field
+                label="Claude conversation"
+                value={configuration.claudeSessionName || 'Created on first fresh launch'}
+              />
+            </section>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 const soundTests: Array<{ event: AudioEvent; label: string }> = [
   { event: 'session.ready', label: 'Session ready' },
   { event: 'session.estimated_completion', label: 'Estimated completion' },
@@ -250,13 +403,13 @@ function AuthenticationSettings({
         onChange={(value) => update({ checkArgs: value })}
       />
       <TextField
-        label="Refresh executable"
+        label="Login executable"
         value={auth.refreshExecutable}
         placeholder="aws"
         onChange={(value) => update({ refreshExecutable: value })}
       />
       <ArgsField
-        label="Refresh arguments"
+        label="Login arguments"
         value={auth.refreshArgs}
         placeholder={'sso\nlogin'}
         onChange={(value) => update({ refreshArgs: value })}

@@ -7,10 +7,14 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import type { SessionSnapshot } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
 import { recordTerminalSize } from '../../services/terminal/TerminalSizeRegistry';
+import type { TerminalReplayStore } from '../../services/terminal/TerminalReplayStore';
 
 interface TerminalPaneProps {
   session: SessionSnapshot;
+  active?: boolean;
+  focusRequest: number;
   terminalBridge: TerminalBridge;
+  terminalReplayStore: TerminalReplayStore;
 }
 
 const isTestRuntime = import.meta.env.MODE === 'test';
@@ -23,7 +27,13 @@ function clampTerminalFontSize(value: number) {
   return Math.min(MAX_TERMINAL_FONT_SIZE, Math.max(MIN_TERMINAL_FONT_SIZE, value));
 }
 
-export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
+export function TerminalPane({
+  session,
+  active = false,
+  focusRequest,
+  terminalBridge,
+  terminalReplayStore,
+}: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -109,6 +119,17 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     searchAddonRef.current = searchAddon;
     terminal.writeln('\x1b[36mLOCAL SYSTEM\x1b[0m');
     terminal.writeln(initialStatusMessageRef.current);
+    const offReplay = terminalReplayStore.subscribe(session.configuration.id, (event) => {
+      if (event.type === 'clear') {
+        terminal.clear();
+      } else {
+        terminal.write(event.data);
+      }
+    });
+    const replay = terminalReplayStore.snapshot(session.configuration.id);
+    if (replay) {
+      terminal.write(replay);
+    }
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== 'keydown' || (!event.ctrlKey && !event.metaKey)) {
         return true;
@@ -168,12 +189,6 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
           lastWriteErrorRef.current = null;
         })
         .catch(() => undefined);
-    });
-
-    const offOutput = terminalBridge.onOutput((event) => {
-      if (event.sessionId === session.configuration.id) {
-        terminal.write(event.data);
-      }
     });
 
     const offExit = terminalBridge.onExit((event) => {
@@ -237,7 +252,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
       container.removeEventListener('paste', onNativePaste, true);
       container.removeEventListener('wheel', onWheel);
       resizeObserver?.disconnect();
-      offOutput();
+      offReplay();
       offExit();
       dataDisposable.dispose();
       terminal.dispose();
@@ -251,6 +266,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     session.configuration.id,
     session.configuration.scrollback,
     terminalBridge,
+    terminalReplayStore,
     zoomTerminal,
   ]);
 
@@ -276,6 +292,18 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
     };
   }, [session.runtime.processState]);
 
+  useEffect(() => {
+    if (!active) {
+      return undefined;
+    }
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      resizeTerminalRef.current();
+      terminalRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [active, focusRequest]);
+
   const copySelection = () => {
     const selection = terminalRef.current?.getSelection();
     if (selection) {
@@ -284,6 +312,7 @@ export function TerminalPane({ session, terminalBridge }: TerminalPaneProps) {
   };
 
   const clearDisplay = () => {
+    terminalReplayStore.clear(session.configuration.id);
     terminalRef.current?.clear();
   };
 

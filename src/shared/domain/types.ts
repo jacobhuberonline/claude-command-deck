@@ -1,6 +1,8 @@
 export const SESSION_IDS = ['session-1', 'session-2', 'session-3', 'session-4'] as const;
+export const MAX_SESSION_COUNT = 32;
+export const SETTINGS_SCHEMA_VERSION = 2;
 
-export type SessionId = (typeof SESSION_IDS)[number];
+export type SessionId = string;
 
 export type ProcessState =
   | 'empty'
@@ -25,6 +27,8 @@ export type ActivityState =
 export type ActivityConfidence = 'low' | 'medium' | 'high';
 
 export type SessionLaunchMode = 'new' | 'continueMostRecent' | 'resumeSpecific' | 'custom';
+
+export type SessionRole = 'project' | 'globalAssistant';
 
 export type ManagedProcessType = 'claudeSession' | 'shellSession' | 'authCheck' | 'authRefresh';
 
@@ -63,9 +67,13 @@ export interface SessionAudioPreferences {
 export interface SessionConfiguration {
   id: SessionId;
   name: string;
+  role: SessionRole;
   workingDirectory: string;
   executable: string;
   args: string[];
+  model: string;
+  claudeSessionName: string;
+  hasNamedConversation: boolean;
   launchMode: SessionLaunchMode;
   scrollback: number;
   restoreOnLaunch: boolean;
@@ -234,6 +242,8 @@ export interface ClaudeContinuationCapabilities {
   continueFlag: string | null;
   resumeSpecific: boolean;
   resumeFlag: string | null;
+  nameSession: boolean;
+  nameFlag: string | null;
 }
 
 export interface AppStateSnapshot {

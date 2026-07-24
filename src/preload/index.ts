@@ -1,9 +1,11 @@
 import electron from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc/channels';
 import type {
+  AppShortcutEvent,
   AuthExitEvent,
   AuthOutputEvent,
   CommandDeckBridge,
+  TerminalConversationBindingEvent,
   TerminalExitEvent,
   TerminalOutputEvent,
   TerminalStateEvent,
@@ -13,6 +15,20 @@ const bridge: CommandDeckBridge = {
     ipcRenderer.invoke(IPC_CHANNELS.appGetState) as Promise<
       Awaited<ReturnType<CommandDeckBridge['getAppState']>>
     >,
+  addSession: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.appAddSession) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['addSession']>>
+    >,
+  removeSession: (request) =>
+    ipcRenderer.invoke(IPC_CHANNELS.appRemoveSession, request) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['removeSession']>>
+    >,
+  onShortcut: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: AppShortcutEvent) =>
+      listener(payload);
+    ipcRenderer.on(IPC_CHANNELS.appShortcut, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.appShortcut, handler);
+  },
   openDirectory: (request) => {
     return ipcRenderer.invoke(IPC_CHANNELS.appOpenExternalDirectory, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['openDirectory']>>
@@ -37,9 +53,24 @@ const bridge: CommandDeckBridge = {
       Awaited<ReturnType<CommandDeckBridge['updateAuthConfiguration']>>
     >;
   },
+  updateClaudeConfiguration: (request) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateClaudeConfiguration, request) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['updateClaudeConfiguration']>>
+    >;
+  },
+  updateDeckPreferences: (request) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateDeckPreferences, request) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['updateDeckPreferences']>>
+    >;
+  },
   updateNotificationPreferences: (request) => {
     return ipcRenderer.invoke(IPC_CHANNELS.appUpdateNotificationPreferences, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['updateNotificationPreferences']>>
+    >;
+  },
+  updateSessionConfiguration: (request) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateSessionConfiguration, request) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['updateSessionConfiguration']>>
     >;
   },
   updateSessionAudioPreferences: (request) => {
@@ -96,6 +127,11 @@ const bridge: CommandDeckBridge = {
         Awaited<ReturnType<CommandDeckBridge['terminal']['startShell']>>
       >;
     },
+    prepareClaude: (request) => {
+      return ipcRenderer.invoke(IPC_CHANNELS.terminalPrepareClaude, request) as Promise<
+        Awaited<ReturnType<CommandDeckBridge['terminal']['prepareClaude']>>
+      >;
+    },
     startClaude: (request) => {
       return ipcRenderer.invoke(IPC_CHANNELS.terminalStartClaude, request) as Promise<
         Awaited<ReturnType<CommandDeckBridge['terminal']['startClaude']>>
@@ -137,6 +173,14 @@ const bridge: CommandDeckBridge = {
         listener(payload);
       ipcRenderer.on(IPC_CHANNELS.terminalState, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.terminalState, handler);
+    },
+    onConversationBinding: (listener) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: TerminalConversationBindingEvent,
+      ) => listener(payload);
+      ipcRenderer.on(IPC_CHANNELS.terminalConversationBinding, handler);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.terminalConversationBinding, handler);
     },
   },
 };

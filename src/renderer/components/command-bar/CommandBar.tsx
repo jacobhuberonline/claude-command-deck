@@ -2,8 +2,9 @@ import {
   BellOff,
   CircleAlert,
   CheckCircle2,
-  Gauge,
   Loader2,
+  PanelLeft,
+  Plus,
   RefreshCcw,
   RotateCcw,
   Settings,
@@ -26,6 +27,7 @@ interface CommandBarProps {
   audio: AudioPreferences;
   onOpenSettings: () => void;
   onToggleFocusMode: () => void;
+  onAddSession: () => void;
   onReloadAll: () => void;
   onAuthAction: () => void;
   onToggleAudio: () => void;
@@ -40,6 +42,7 @@ export function CommandBar({
   audio,
   onOpenSettings,
   onToggleFocusMode,
+  onAddSession,
   onReloadAll,
   onAuthAction,
   onToggleAudio,
@@ -88,12 +91,22 @@ export function CommandBar({
         <button
           className="control-button primary"
           type="button"
-          title="Reload All sessions"
-          aria-label="Reload All sessions"
+          title="Add a Claude session directory (Alt+N)"
+          aria-label="Add session"
+          onClick={onAddSession}
+        >
+          <Plus size={16} aria-hidden="true" />
+          <span>Session</span>
+        </button>
+        <button
+          className="control-button"
+          type="button"
+          title="Restart all active Claude sessions"
+          aria-label="Restart active Claude sessions"
           onClick={onReloadAll}
         >
           <RotateCcw size={16} aria-hidden="true" />
-          <span>Reload All</span>
+          <span>Restart Active</span>
         </button>
         <button
           className="icon-button"
@@ -113,11 +126,11 @@ export function CommandBar({
         <button
           className="icon-button"
           type="button"
-          title="Toggle focused-session mode"
-          aria-label="Toggle focused-session mode"
+          title="Hide or show session navigator (Alt+F)"
+          aria-label="Toggle session navigator"
           onClick={onToggleFocusMode}
         >
-          <Gauge size={17} aria-hidden="true" />
+          <PanelLeft size={17} aria-hidden="true" />
         </button>
         <button
           className="icon-button"

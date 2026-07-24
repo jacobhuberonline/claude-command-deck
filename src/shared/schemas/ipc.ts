@@ -1,19 +1,24 @@
 import { z } from 'zod';
-import { SESSION_IDS } from '../domain/types';
 import {
   authConfigurationSchema,
   audioPreferencesSchema,
   notificationPreferencesSchema,
   sessionAudioPreferencesSchema,
+  sessionConfigurationSchema,
+  sessionIdSchema,
 } from './settings';
 
-export const sessionIdSchema = z.enum(SESSION_IDS);
+export { sessionIdSchema };
 
 export const openExternalDirectoryRequestSchema = z.object({
   sessionId: sessionIdSchema,
 });
 
 export const selectDirectoryRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+});
+
+export const removeSessionRequestSchema = z.object({
   sessionId: sessionIdSchema,
 });
 
@@ -25,8 +30,22 @@ export const updateAuthConfigurationRequestSchema = z.object({
   auth: authConfigurationSchema,
 });
 
+export const updateClaudeConfigurationRequestSchema = z.object({
+  executable: z.string().trim().min(1).max(512),
+  baseArgs: z.array(z.string().max(2048)).max(64),
+});
+
+export const updateDeckPreferencesRequestSchema = z.object({
+  focusedSessionId: sessionIdSchema,
+  focusMode: z.boolean(),
+});
+
 export const updateNotificationPreferencesRequestSchema = z.object({
   preferences: notificationPreferencesSchema,
+});
+
+export const updateSessionConfigurationRequestSchema = z.object({
+  configuration: sessionConfigurationSchema,
 });
 
 export const updateSessionAudioPreferencesRequestSchema = z.object({
@@ -45,11 +64,19 @@ export const startShellRequestSchema = z.object({
   rows: z.number().int().min(2).max(200),
 });
 
+export const prepareClaudeLaunchRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  launchMode: z.enum(['new', 'continueMostRecent', 'resumeSpecific']),
+});
+
 export const startClaudeRequestSchema = z.object({
   sessionId: sessionIdSchema,
-  workingDirectory: z.string().max(4096),
-  executable: z.string().trim().min(1).max(512),
-  args: z.array(z.string().max(2048)).max(64),
+  planId: z
+    .string()
+    .trim()
+    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i),
+  allowFreshFallback: z.boolean(),
+  allowAmbiguousContinue: z.boolean(),
   cols: z.number().int().min(2).max(500),
   rows: z.number().int().min(2).max(200),
 });
@@ -67,6 +94,11 @@ export const terminalResizeRequestSchema = z.object({
 
 export const terminalStopRequestSchema = z.object({
   sessionId: sessionIdSchema,
+  planId: z
+    .string()
+    .trim()
+    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+    .optional(),
 });
 
 export const authWriteRequestSchema = z.object({

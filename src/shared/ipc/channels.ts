@@ -1,11 +1,17 @@
 export const IPC_CHANNELS = {
   appGetState: 'app:get-state',
+  appAddSession: 'app:add-session',
+  appRemoveSession: 'app:remove-session',
   appOpenExternalDirectory: 'app:open-external-directory',
   appOpenLogDirectory: 'app:open-log-directory',
   appSelectDirectory: 'app:select-directory',
+  appShortcut: 'app:shortcut',
   appUpdateAuthConfiguration: 'app:update-auth-configuration',
+  appUpdateClaudeConfiguration: 'app:update-claude-configuration',
+  appUpdateDeckPreferences: 'app:update-deck-preferences',
   appUpdateAudioPreferences: 'app:update-audio-preferences',
   appUpdateNotificationPreferences: 'app:update-notification-preferences',
+  appUpdateSessionConfiguration: 'app:update-session-configuration',
   appUpdateSessionAudioPreferences: 'app:update-session-audio-preferences',
   claudeDiscover: 'claude:discover',
   authCheck: 'auth:check',
@@ -16,6 +22,7 @@ export const IPC_CHANNELS = {
   authOutput: 'auth:output',
   authExit: 'auth:exit',
   terminalStartShell: 'terminal:start-shell',
+  terminalPrepareClaude: 'terminal:prepare-claude',
   terminalStartClaude: 'terminal:start-claude',
   terminalWrite: 'terminal:write',
   terminalResize: 'terminal:resize',
@@ -24,6 +31,7 @@ export const IPC_CHANNELS = {
   terminalOutput: 'terminal:output',
   terminalExit: 'terminal:exit',
   terminalState: 'terminal:state',
+  terminalConversationBinding: 'terminal:conversation-binding',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

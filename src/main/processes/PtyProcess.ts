@@ -60,35 +60,39 @@ export class PtyProcess {
       throw error;
     }
 
+    const activeProcess = this.process;
+    activeProcess.onData((data) => {
+      if (this.process !== activeProcess) {
+        return;
+      }
+      this.lastOutputAt = new Date().toISOString();
+      this.emitData(data);
+    });
+
+    activeProcess.onExit((event) => {
+      this.exitCode = event.exitCode;
+      this.signal = event.signal === undefined ? null : String(event.signal);
+      this.state = this.state === 'stopping' || event.exitCode === 0 ? 'stopped' : 'crashed';
+      this.process = null;
+      this.options.logger.info('PTY exited', {
+        sessionId: this.options.sessionId,
+        pid: activeProcess.pid,
+        exitCode: this.exitCode,
+        signal: this.signal,
+      });
+      this.emitState();
+      this.emitExit(this.exitCode, this.signal);
+    });
+
     this.state = 'running';
     this.options.logger.info('PTY started', {
       sessionId: this.options.sessionId,
       type: this.options.type,
-      pid: this.process.pid,
+      pid: activeProcess.pid,
       executable: this.options.executable,
       workingDirectory: this.options.workingDirectory,
     });
     this.emitState();
-
-    this.process.onData((data) => {
-      this.lastOutputAt = new Date().toISOString();
-      this.options.onData(this.options.sessionId, data);
-    });
-
-    this.process.onExit((event) => {
-      this.exitCode = event.exitCode;
-      this.signal = event.signal === undefined ? null : String(event.signal);
-      this.state = this.state === 'stopping' || event.exitCode === 0 ? 'stopped' : 'crashed';
-      this.options.logger.info('PTY exited', {
-        sessionId: this.options.sessionId,
-        pid: this.process?.pid,
-        exitCode: this.exitCode,
-        signal: this.signal,
-      });
-      this.options.onExit(this.options.sessionId, this.exitCode, this.signal);
-      this.emitState();
-      this.process = null;
-    });
   }
 
   write(data: string): boolean {
@@ -109,18 +113,50 @@ export class PtyProcess {
     return true;
   }
 
-  stop(): void {
+  isAttached(): boolean {
+    return this.process !== null;
+  }
+
+  stop(): boolean {
     if (!this.process) {
-      return;
+      return false;
     }
 
+    const activeProcess = this.process;
     this.state = 'stopping';
     this.emitState();
     this.options.logger.info('PTY stop requested', {
       sessionId: this.options.sessionId,
-      pid: this.process.pid,
+      pid: activeProcess.pid,
     });
-    this.process.kill();
+    try {
+      activeProcess.kill();
+      return true;
+    } catch (error) {
+      this.state = 'error';
+      this.options.logger.error('PTY stop failed', {
+        sessionId: this.options.sessionId,
+        pid: activeProcess.pid,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.emitState();
+      return false;
+    }
+  }
+
+  abortStart(): void {
+    const activeProcess = this.process;
+    this.process = null;
+    this.state = 'stopped';
+    if (!activeProcess) {
+      return;
+    }
+
+    try {
+      activeProcess.kill();
+    } catch {
+      // Best-effort cleanup for a PTY that failed after spawn but before ownership was established.
+    }
   }
 
   snapshot(): ManagedProcessSnapshot {
@@ -156,6 +192,35 @@ export class PtyProcess {
   }
 
   private emitState(): void {
-    this.options.onState(this.options.sessionId, this.snapshot());
+    try {
+      this.options.onState(this.options.sessionId, this.snapshot());
+    } catch (error) {
+      this.options.logger.error('PTY state observer failed', {
+        sessionId: this.options.sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private emitData(data: string): void {
+    try {
+      this.options.onData(this.options.sessionId, data);
+    } catch (error) {
+      this.options.logger.error('PTY output observer failed', {
+        sessionId: this.options.sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private emitExit(exitCode: number | null, signal: string | null): void {
+    try {
+      this.options.onExit(this.options.sessionId, exitCode, signal);
+    } catch (error) {
+      this.options.logger.error('PTY exit observer failed', {
+        sessionId: this.options.sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }

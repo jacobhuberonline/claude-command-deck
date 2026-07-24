@@ -31,9 +31,20 @@ export function broadcastAuthExit(event: AuthExitEvent): void {
 }
 
 function broadcast(channel: string, payload: unknown): void {
-  BrowserWindow.getAllWindows().forEach((window) => {
-    if (!window.isDestroyed()) {
-      window.webContents.send(channel, payload);
+  let windows: BrowserWindow[];
+  try {
+    windows = BrowserWindow.getAllWindows();
+  } catch {
+    return;
+  }
+
+  windows.forEach((window) => {
+    try {
+      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+        window.webContents.send(channel, payload);
+      }
+    } catch {
+      // A renderer can disappear between the lifecycle checks and send.
     }
   });
 }

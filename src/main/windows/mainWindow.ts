@@ -1,6 +1,8 @@
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { BrowserWindow, screen, shell } from 'electron';
 import { is } from '@electron-toolkit/utils';
+import { isAllowedAppNavigation, isSafeExternalUrl } from './NavigationPolicy';
 import { defaultWindowBounds } from './WindowState';
 import { WindowStateStore } from './WindowStateStore';
 
@@ -42,8 +44,22 @@ export function createMainWindow(): BrowserWindow {
 
   registerWindowStatePersistence(mainWindow, windowStateStore);
 
+  const packagedRendererUrl = pathToFileURL(join(__dirname, '../renderer/index.html')).toString();
+  const applicationUrl =
+    is.dev && process.env.ELECTRON_RENDERER_URL
+      ? process.env.ELECTRON_RENDERER_URL
+      : packagedRendererUrl;
+  const preventUntrustedNavigation = (event: Electron.Event, url: string) => {
+    if (!isAllowedAppNavigation(url, applicationUrl)) {
+      event.preventDefault();
+    }
+  };
+  mainWindow.webContents.on('will-navigate', preventUntrustedNavigation);
+  mainWindow.webContents.on('will-redirect', preventUntrustedNavigation);
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
 

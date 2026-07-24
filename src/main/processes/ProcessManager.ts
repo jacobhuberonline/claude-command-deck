@@ -1,21 +1,22 @@
 import { existsSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { isAbsolute } from 'node:path';
-import type { ManagedProcessSnapshot, SessionId } from '../../shared/domain/types';
-import type {
-  CommandResult,
-  StartClaudeRequest,
-  StartShellRequest,
-} from '../../shared/ipc/contracts';
+import {
+  MAX_SESSION_COUNT,
+  type ManagedProcessSnapshot,
+  type SessionId,
+} from '../../shared/domain/types';
+import type { CommandResult, StartShellRequest } from '../../shared/ipc/contracts';
 import type { SafeLogger } from '../logging/SafeLogger';
 import { resolveCommand } from './CommandResolution';
 import { discoverDefaultShell } from './ShellDiscovery';
 import { PtyProcess } from './PtyProcess';
 
 interface ProcessManagerEvents {
-  onOutput: (sessionId: SessionId, data: string) => void;
+  onOutput: (sessionId: SessionId, processId: string, data: string) => void;
   onExit: (
     sessionId: SessionId,
+    processId: string,
     exitCode: number | null,
     signal: string | null,
     crashed: boolean,
@@ -23,9 +24,21 @@ interface ProcessManagerEvents {
   onState: (sessionId: SessionId, snapshot: ManagedProcessSnapshot) => void;
 }
 
+interface ResolvedClaudeStartRequest {
+  sessionId: SessionId;
+  workingDirectory: string;
+  executable: string;
+  args: string[];
+  cols: number;
+  rows: number;
+}
+
+type ManagedProcessStartResult = { ok: true; processId: string } | { ok: false; error: string };
+
 export class ProcessManager {
   private readonly processes = new Map<SessionId, PtyProcess>();
-  private readonly outputBuffers = new Map<SessionId, string>();
+  private readonly processEpochs = new Map<SessionId, number>();
+  private readonly outputBuffers = new Map<SessionId, { processId: string; data: string }>();
   private readonly outputFlushTimers = new Map<SessionId, NodeJS.Timeout>();
 
   constructor(
@@ -48,13 +61,13 @@ export class ProcessManager {
     });
   }
 
-  startClaude(request: StartClaudeRequest): CommandResult {
+  startClaude(request: ResolvedClaudeStartRequest): ManagedProcessStartResult {
     const executable = resolveExecutable(request.executable);
     if (!executable) {
       return { ok: false, error: `Claude executable "${request.executable}" was not found.` };
     }
 
-    return this.startManagedProcess({
+    const result = this.startManagedProcess({
       type: 'claudeSession',
       sessionId: request.sessionId,
       workingDirectory: request.workingDirectory,
@@ -64,6 +77,14 @@ export class ProcessManager {
       rows: request.rows,
       logLabel: 'Claude session started',
     });
+    if (!result.ok) {
+      return result;
+    }
+
+    const processId = this.processes.get(request.sessionId)?.snapshot().id;
+    return processId
+      ? { ok: true, processId }
+      : { ok: false, error: 'Claude started without a managed process identity.' };
   }
 
   write(sessionId: SessionId, data: string): CommandResult {
@@ -90,23 +111,40 @@ export class ProcessManager {
       return { ok: false, error: 'No process is attached to this session bay.' };
     }
 
-    process.stop();
-    return { ok: true };
+    return process.stop()
+      ? { ok: true }
+      : { ok: false, error: 'The attached process could not be stopped.' };
   }
 
   snapshots(): ManagedProcessSnapshot[] {
     return [...this.processes.values()].map((process) => process.snapshot());
   }
 
-  stopAll(): void {
-    [...this.processes.values()].forEach((process) => process.stop());
+  hasActiveProcess(sessionId: SessionId): boolean {
+    return this.processes.get(sessionId)?.isAttached() ?? false;
   }
 
-  private enqueueOutput(sessionId: SessionId, data: string): void {
-    const current = this.outputBuffers.get(sessionId) ?? '';
-    this.outputBuffers.set(sessionId, current + data);
+  processEpoch(sessionId: SessionId): number {
+    return this.processEpochs.get(sessionId) ?? 0;
+  }
 
-    if ((this.outputBuffers.get(sessionId)?.length ?? 0) > 64 * 1024) {
+  stopAll(): void {
+    [...this.processes.values()].forEach((process) => {
+      process.stop();
+    });
+  }
+
+  private enqueueOutput(sessionId: SessionId, processId: string, data: string): void {
+    const current = this.outputBuffers.get(sessionId);
+    if (current && current.processId !== processId) {
+      this.flushOutput(sessionId);
+    }
+    this.outputBuffers.set(sessionId, {
+      processId,
+      data: (current?.processId === processId ? current.data : '') + data,
+    });
+
+    if ((this.outputBuffers.get(sessionId)?.data.length ?? 0) > 64 * 1024) {
       this.flushOutput(sessionId);
       return;
     }
@@ -124,13 +162,21 @@ export class ProcessManager {
       this.outputFlushTimers.delete(sessionId);
     }
 
-    const output = this.outputBuffers.get(sessionId);
-    if (!output) {
+    const buffered = this.outputBuffers.get(sessionId);
+    if (!buffered) {
       return;
     }
 
     this.outputBuffers.delete(sessionId);
-    this.events.onOutput(sessionId, output);
+    try {
+      this.events.onOutput(sessionId, buffered.processId, buffered.data);
+    } catch (error) {
+      this.logger.error('Process output observer failed', {
+        sessionId,
+        processId: buffered.processId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private startManagedProcess({
@@ -155,8 +201,14 @@ export class ProcessManager {
     logMetadata?: Record<string, unknown>;
   }): CommandResult {
     const existing = this.processes.get(sessionId);
-    if (existing && ['starting', 'running', 'stopping'].includes(existing.snapshot().state)) {
+    if (existing?.isAttached()) {
       return { ok: false, error: 'A process is already active for this session bay.' };
+    }
+    if (!existing && this.processes.size >= MAX_SESSION_COUNT) {
+      return {
+        ok: false,
+        error: `At most ${MAX_SESSION_COUNT} terminal processes can be active.`,
+      };
     }
 
     const directory = workingDirectory.trim();
@@ -175,20 +227,45 @@ export class ProcessManager {
       cols,
       rows,
       logger: this.logger,
-      onData: (activeSessionId, data) => this.enqueueOutput(activeSessionId, data),
+      onData: (activeSessionId, data) =>
+        this.enqueueOutput(activeSessionId, process.snapshot().id, data),
       onExit: (activeSessionId, exitCode, signal) => {
-        this.flushOutput(activeSessionId);
+        if (this.processes.get(activeSessionId) !== process) {
+          return;
+        }
         const crashed = process.snapshot().state === 'crashed';
         this.processes.delete(activeSessionId);
-        this.events.onExit(activeSessionId, exitCode, signal, crashed);
+        this.flushOutput(activeSessionId);
+        try {
+          this.events.onExit(activeSessionId, process.snapshot().id, exitCode, signal, crashed);
+        } catch (error) {
+          this.logger.error('Process exit observer failed', {
+            sessionId: activeSessionId,
+            processId: process.snapshot().id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       },
-      onState: (activeSessionId, snapshot) => this.events.onState(activeSessionId, snapshot),
+      onState: (activeSessionId, snapshot) => {
+        if (this.processes.get(activeSessionId) === process) {
+          try {
+            this.events.onState(activeSessionId, snapshot);
+          } catch (error) {
+            this.logger.error('Process state observer failed', {
+              sessionId: activeSessionId,
+              processId: snapshot.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+      },
     });
 
     this.processes.set(sessionId, process);
 
     try {
       process.start();
+      this.processEpochs.set(sessionId, this.processEpoch(sessionId) + 1);
       this.logger.info(logLabel, {
         sessionId,
         executable,
@@ -197,7 +274,10 @@ export class ProcessManager {
       });
       return { ok: true };
     } catch (error) {
-      this.processes.delete(sessionId);
+      if (this.processes.get(sessionId) === process) {
+        this.processes.delete(sessionId);
+      }
+      process.abortStart();
       return {
         ok: false,
         error: error instanceof Error ? error.message : 'Unable to start managed process.',
@@ -211,12 +291,16 @@ function validateWorkingDirectory(directory: string): CommandResult {
     return { ok: false, error: 'Select a working directory before opening a shell.' };
   }
 
-  if (!existsSync(directory)) {
-    return { ok: false, error: 'The configured working directory does not exist.' };
-  }
+  try {
+    if (!existsSync(directory)) {
+      return { ok: false, error: 'The configured working directory does not exist.' };
+    }
 
-  if (!statSync(directory).isDirectory()) {
-    return { ok: false, error: 'The configured working directory is not a directory.' };
+    if (!statSync(directory).isDirectory()) {
+      return { ok: false, error: 'The configured working directory is not a directory.' };
+    }
+  } catch {
+    return { ok: false, error: 'The configured working directory could not be accessed.' };
   }
 
   return { ok: true };

@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { SESSION_IDS } from '../domain/types';
+import { MAX_SESSION_COUNT, SETTINGS_SCHEMA_VERSION } from '../domain/types';
 
-const sessionIdSchema = z.enum(SESSION_IDS);
+export const sessionIdSchema = z.string().trim().min(1).max(128);
 const launchModeSchema = z.enum(['new', 'continueMostRecent', 'resumeSpecific', 'custom']);
+const sessionRoleSchema = z.enum(['project', 'globalAssistant']);
 
 export const sessionAudioPreferencesSchema = z.object({
   enabled: z.boolean(),
@@ -16,9 +17,13 @@ export const sessionAudioPreferencesSchema = z.object({
 export const sessionConfigurationSchema = z.object({
   id: sessionIdSchema,
   name: z.string().min(1).max(120),
+  role: sessionRoleSchema.default('project'),
   workingDirectory: z.string().max(4096),
-  executable: z.string().min(1).max(512),
+  executable: z.string().max(512),
   args: z.array(z.string().max(2048)).max(64),
+  model: z.string().trim().max(256).default(''),
+  claudeSessionName: z.string().trim().max(80).default(''),
+  hasNamedConversation: z.boolean().default(false),
   launchMode: launchModeSchema,
   scrollback: z.number().int().min(100).max(100000),
   restoreOnLaunch: z.boolean(),
@@ -75,15 +80,29 @@ export const notificationPreferencesSchema = z.object({
   cooldownMs: z.number().int().min(0).max(600000),
 });
 
-export const applicationSettingsSchema = z.object({
-  schemaVersion: z.literal(1),
-  shellExecutable: z.string().min(1).max(512),
-  claudeExecutable: z.string().min(1).max(512),
-  claudeBaseArgs: z.array(z.string().max(2048)).max(64),
-  sessions: z.array(sessionConfigurationSchema).length(4),
-  focusedSessionId: sessionIdSchema,
-  focusMode: z.boolean(),
-  auth: authConfigurationSchema,
-  audio: audioPreferencesSchema,
-  notifications: notificationPreferencesSchema,
-});
+export const applicationSettingsSchema = z
+  .object({
+    schemaVersion: z.literal(SETTINGS_SCHEMA_VERSION),
+    shellExecutable: z.string().min(1).max(512),
+    claudeExecutable: z.string().min(1).max(512),
+    claudeBaseArgs: z.array(z.string().max(2048)).max(64),
+    sessions: z.array(sessionConfigurationSchema).min(1).max(MAX_SESSION_COUNT),
+    focusedSessionId: sessionIdSchema,
+    focusMode: z.boolean(),
+    auth: authConfigurationSchema,
+    audio: audioPreferencesSchema,
+    notifications: notificationPreferencesSchema,
+  })
+  .superRefine((settings, context) => {
+    const seen = new Set<string>();
+    settings.sessions.forEach((session, index) => {
+      if (seen.has(session.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['sessions', index, 'id'],
+          message: 'Session IDs must be unique.',
+        });
+      }
+      seen.add(session.id);
+    });
+  });

@@ -10,8 +10,8 @@ const logger = {
 } as unknown as SafeLogger;
 
 describe('phase 3 Claude discovery and launch', () => {
-  it('reports a missing Claude executable truthfully', () => {
-    const result = discoverClaude('definitely-not-claude-command-deck-test');
+  it('reports a missing Claude executable truthfully', async () => {
+    const result = await discoverClaude('definitely-not-claude-command-deck-test');
 
     expect(result.found).toBe(false);
     expect(result.resolvedPath).toBeNull();

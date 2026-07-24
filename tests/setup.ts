@@ -16,3 +16,4 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 HTMLCanvasElement.prototype.getContext = vi.fn();
+HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());

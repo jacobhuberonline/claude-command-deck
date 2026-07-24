@@ -23,7 +23,7 @@ Owns desktop integration and trusted operations:
 
 ### Preload Process
 
-Exposes a narrow `window.commandDeck` bridge. It does not expose Node.js primitives, raw filesystem access, arbitrary command execution, or generic IPC passthrough.
+Exposes a narrow `window.commandDeck` bridge. It does not expose Node.js primitives, raw filesystem access, or generic IPC passthrough. Session-scoped PTY start and input are intentionally command-capable because this is a local terminal application, so the bundled renderer is part of the trusted computing base. Main-frame navigation is restricted to the packaged app (or the configured development origin), and only HTTP(S) links may open externally.
 
 ### Renderer Process
 
@@ -35,7 +35,7 @@ IPC contracts are defined in shared TypeScript types and Zod schemas. Main-proce
 
 ## PTY Lifecycle
 
-Each managed PTY has an internal UUID, process type, optional session bay, working directory, executable, arguments, PID, lifecycle timestamps, exit metadata, and restart generation. Terminal display lifecycle is separate from PTY lifecycle so a remounted React component does not create duplicate processes. Renderer reload recovery initially presents active process snapshots and allows safe reattachment or stop.
+Each managed PTY has an internal UUID, process type, opaque session ID, working directory, executable, arguments, PID, lifecycle timestamps, exit metadata, and restart generation. Terminal display lifecycle is separate from PTY lifecycle so switching the selected profile does not create duplicate processes. The renderer keeps a bounded, non-persistent output replay per session so the primary xterm can reconstruct recent scrollback after a switch.
 
 ## Session State Model
 
@@ -48,7 +48,9 @@ The UI uses uncertain language for heuristic states.
 
 ## Claude Discovery And Continuation
 
-Claude discovery checks whether the configured executable resolves, captures the safe version output, and inspects help text for supported continuation options. `ClaudeCommandBuilder` selects the safest launch mode from `new`, `continueMostRecent`, `resumeSpecific`, or `custom`. If two bays share a directory and no reliable specific resume identifier is known, Reload & Continue shows an ambiguity warning and reports the strategy actually used.
+Claude discovery checks the effective executable that will actually be launched, captures safe version output, and inspects help text for supported continuation and session-naming options. `ClaudeCommandBuilder` selects the safest launch mode from `new`, `continueMostRecent`, `resumeSpecific`, or `custom`. The renderer sends launch intent and narrowly scoped consent only; the main process rebuilds the executable, arguments, model override, working directory, and fresh conversation name from persisted settings before starting a PTY.
+
+Fresh conversations receive a unique `--name` when supported. Later continuation uses `--resume <name>` so parallel sessions can remain distinct even when they share a directory. The app refuses to degrade a known named conversation to directory-most-recent; legacy unnamed sessions require an explicit warning when directories overlap. Model selection is optional and per-session, with an empty value adding no override beyond the configured default launch arguments. One-shot main-process launch plans protect against stale UI state, changed profiles, and process-replacement races; they are integrity controls for the trusted local UI, not a sandbox against a compromised renderer.
 
 ## Authentication Monitoring
 
@@ -60,7 +62,7 @@ Renderer-side audio listens for semantic events and decides whether to play loca
 
 ## Persistence Boundaries
 
-Electron Store persists non-secret metadata only: session names, directories, preferred executable and arguments, launch preferences, layout, authentication command configuration, audio preferences, quiet hours, and diagnostics preferences. It does not persist terminal transcripts, terminal input, raw authentication output, environment dumps, access keys, session tokens, device codes, cookies, or bearer tokens.
+Electron Store persists non-secret metadata only: opaque session IDs, display names, Claude conversation names, model overrides, directories, preferred executable and arguments, launch preferences, selected session, navigator layout, authentication command configuration, audio preferences, quiet hours, and diagnostics preferences. It does not persist terminal transcripts, terminal input, raw authentication output, environment dumps, access keys, session tokens, device codes, cookies, or bearer tokens.
 
 ## Logging And Redaction
 

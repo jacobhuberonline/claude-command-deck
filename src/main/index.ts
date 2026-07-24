@@ -50,20 +50,22 @@ async function bootstrap(): Promise<void> {
     onExit: (exitCode, signal) => broadcastAuthExit({ exitCode, signal }),
   });
   processManager = new ProcessManager(logger, {
-    onOutput: (sessionId, data) => broadcastTerminalOutput({ sessionId, data }),
-    onExit: (sessionId, exitCode, signal, crashed) =>
+    onOutput: (sessionId, processId, data) =>
+      broadcastTerminalOutput({ sessionId, processId, data }),
+    onExit: (sessionId, processId, exitCode, signal, crashed) =>
       broadcastTerminalExit({
         sessionId,
+        processId,
         exitCode,
         signal,
         crashed,
       }),
     onState: (sessionId, snapshot) => broadcastTerminalState({ sessionId, snapshot }),
   });
-  registerAppStateHandlers(app.getVersion(), settingsStore, logger);
+  registerAppStateHandlers(app.getVersion(), settingsStore, logger, processManager);
   registerAuthHandlers(authService);
   registerClaudeHandlers();
-  registerTerminalHandlers(processManager);
+  registerTerminalHandlers(processManager, settingsStore);
   registerLifecycle();
 
   createMainWindow();

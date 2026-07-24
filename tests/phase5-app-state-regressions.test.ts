@@ -1,0 +1,90 @@
+import type { SafeLogger } from '../src/main/logging/SafeLogger';
+import { registerAppStateHandlers } from '../src/main/ipc/appState';
+import type { SettingsStore } from '../src/main/persistence/SettingsStore';
+import type { ProcessManager } from '../src/main/processes/ProcessManager';
+import {
+  createDefaultSessionConfiguration,
+  createDefaultSettings,
+} from '../src/shared/domain/defaults';
+import { IPC_CHANNELS } from '../src/shared/ipc/channels';
+
+type IpcHandler = (event: unknown, payload?: unknown) => unknown;
+
+const electronMocks = vi.hoisted(() => ({
+  handlers: new Map<string, IpcHandler>(),
+  showOpenDialog: vi.fn(),
+  openPath: vi.fn(),
+}));
+
+vi.mock('electron', () => ({
+  dialog: {
+    showOpenDialog: electronMocks.showOpenDialog,
+  },
+  ipcMain: {
+    handle: vi.fn((channel: string, handler: IpcHandler) => {
+      electronMocks.handlers.set(channel, handler);
+    }),
+  },
+  shell: {
+    openPath: electronMocks.openPath,
+  },
+}));
+
+describe('phase 5 app-state mutation regressions', () => {
+  const settings = createDefaultSettings();
+  const updateSessionConfiguration = vi.fn();
+  const updateSessionAudioPreferences = vi.fn();
+  const settingsStore = {
+    load: vi.fn(() => settings),
+    updateSessionConfiguration,
+    updateSessionAudioPreferences,
+  } as unknown as SettingsStore;
+  const logger = {
+    getLogDirectory: vi.fn(() => '/tmp/logs'),
+  } as unknown as SafeLogger;
+  const processManager = {
+    hasActiveProcess: vi.fn(() => false),
+    processEpoch: vi.fn(() => 0),
+  } as unknown as ProcessManager;
+
+  beforeEach(() => {
+    electronMocks.handlers.clear();
+    vi.clearAllMocks();
+    registerAppStateHandlers('0.1.0-test', settingsStore, logger, processManager);
+  });
+
+  it('rejects a configuration update for an unknown session', async () => {
+    const handler = getHandler(IPC_CHANNELS.appUpdateSessionConfiguration);
+    const result = await handler(undefined, {
+      configuration: createDefaultSessionConfiguration('session-unknown'),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'The selected session no longer exists.',
+    });
+    expect(updateSessionConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('rejects an audio update for an unknown session', async () => {
+    const handler = getHandler(IPC_CHANNELS.appUpdateSessionAudioPreferences);
+    const result = await handler(undefined, {
+      sessionId: 'session-unknown',
+      preferences: createDefaultSessionConfiguration('session-unknown').audio,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'The selected session no longer exists.',
+    });
+    expect(updateSessionAudioPreferences).not.toHaveBeenCalled();
+  });
+});
+
+function getHandler(channel: string): IpcHandler {
+  const handler = electronMocks.handlers.get(channel);
+  if (!handler) {
+    throw new Error(`Missing IPC handler for ${channel}`);
+  }
+  return handler;
+}

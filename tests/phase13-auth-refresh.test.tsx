@@ -72,6 +72,11 @@ function createMockBridge(
 
   return {
     getAppState: vi.fn(() => Promise.resolve(snapshot)),
+    onShortcut: vi.fn(() => off),
+    addSession: vi.fn(() =>
+      Promise.resolve({ ok: false as const, error: 'Not available.', cancelled: true }),
+    ),
+    removeSession: vi.fn(() => Promise.resolve({ ok: true as const })),
     openDirectory: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
     openLogDirectory: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
     selectDirectory: vi.fn(() =>
@@ -83,7 +88,10 @@ function createMockBridge(
     ),
     updateAuthConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
+    updateClaudeConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
+    updateDeckPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateNotificationPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
+    updateSessionConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateSessionAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     claude: {
       discover: vi.fn(() =>
@@ -98,6 +106,8 @@ function createMockBridge(
             continueFlag: null,
             resumeSpecific: false,
             resumeFlag: null,
+            nameSession: false,
+            nameFlag: null,
           },
           error: null,
           checkedAt: new Date().toISOString(),
@@ -121,7 +131,26 @@ function createMockBridge(
     },
     terminal: {
       startShell: vi.fn(() => Promise.resolve({ ok: true as const })),
-      startClaude: vi.fn(() => Promise.resolve({ ok: true as const })),
+      prepareClaude: vi.fn(() =>
+        Promise.resolve({
+          ok: true as const,
+          planId: '11111111-1111-4111-8111-111111111111',
+          strategy: 'new' as const,
+          requiresFreshFallbackConsent: false,
+          requiresAmbiguousContinueConsent: false,
+          hasActiveProcess: false,
+          warnings: [],
+        }),
+      ),
+      startClaude: vi.fn(() =>
+        Promise.resolve({
+          ok: true as const,
+          processId: 'process-claude-1',
+          strategy: 'new' as const,
+          newConversationBinding: 'deck-session-1-1',
+          warnings: [],
+        }),
+      ),
       write: vi.fn(() => Promise.resolve({ ok: true as const })),
       resize: vi.fn(() => Promise.resolve({ ok: true as const })),
       stop: vi.fn(() => Promise.resolve({ ok: true as const })),
@@ -129,6 +158,7 @@ function createMockBridge(
       onOutput: vi.fn(() => off),
       onExit: vi.fn(() => off),
       onState: vi.fn(() => off),
+      onConversationBinding: vi.fn(() => off),
     },
   };
 }

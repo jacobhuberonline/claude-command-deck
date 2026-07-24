@@ -2,27 +2,27 @@
 
 ## Product Scope
 
-Claude Command Deck is a local Windows-first desktop app for supervising up to four real Claude Code sessions from one command-deck window. It is not a hosted service, remote-control tool, autonomous coding platform, or replacement for the Claude CLI.
+Claude Command Deck is a local Windows-first desktop app for supervising many real Claude Code sessions from one command-deck window. It is not a hosted service, remote-control tool, autonomous coding platform, or replacement for the Claude CLI.
 
 ## Core Workflows
 
-- Configure up to four session bays with names, working directories, commands, and audio preferences.
-- Launch a real interactive PowerShell or Claude Code PTY in each bay.
+- Configure up to 32 saved session profiles with names, working directories, commands, models, and audio preferences.
+- Find sessions by name or path and keep one large interactive PowerShell or Claude Code PTY in focus.
 - See truthful process state, conservative activity state, and same-project ambiguity at a glance.
 - Reload one session or all sessions so startup-loaded Claude configuration can be reread.
-- Continue the prior conversation only when the installed CLI exposes a supported strategy.
+- Name fresh Claude conversations and resume the exact name when the installed CLI exposes supported flags.
 - Run a safe authentication check and use a dedicated interactive credential-refresh console.
 - Receive subtle, configurable sound and native notification cues without repeated noise.
 
 ## Acceptance Criteria
 
 - Secure Electron shell launches without a blank renderer.
-- Four session bays render in a responsive 2x2 layout on desktop widths.
+- A searchable session navigator and primary terminal render across desktop widths.
 - PTY input, ANSI output, scrollback, resize, copy, paste, process exit, and cleanup work.
 - Shell discovery prefers PowerShell 7 on Windows and falls back safely.
 - Claude command discovery reports executable, version, and continuation support honestly.
-- Reload & Continue and Fresh Restart preserve bay configuration and report the actual launch strategy.
-- Reload All sequences eligible sessions and summarizes results.
+- Continue and Fresh Start preserve session configuration and report the actual launch strategy.
+- Restart Active sequences only live Claude sessions and summarizes results.
 - Authentication status never claims connected without a successful check.
 - Credential refresh console is interactive and triggers a new check after successful exit.
 - Settings persistence restores configured but stopped bays by default.
@@ -31,7 +31,7 @@ Claude Command Deck is a local Windows-first desktop app for supervising up to f
 
 ## Explicit Exclusions
 
-- Remote access, team collaboration, telemetry, cloud sync, user accounts, automatic Git actions, worktree orchestration, more than four bays, Codex/Gemini integration, agent-to-agent delegation, plugin marketplace, full terminal recording, and automatic approval of Claude prompts.
+- Remote access, team collaboration, telemetry, cloud sync, user accounts, automatic Git actions, worktree orchestration, Codex/Gemini integration, agent-to-agent delegation, plugin marketplace, full terminal recording, and automatic approval of Claude prompts.
 
 ## Known Phase 0 Limitations
 

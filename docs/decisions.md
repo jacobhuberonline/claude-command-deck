@@ -16,7 +16,7 @@
 - Renderer: `react@19.2.7`, `react-dom@19.2.7`, `lucide-react@1.24.0`
 - Terminal: `@xterm/xterm@6.0.0`, `@xterm/addon-fit@0.11.0`, `@xterm/addon-search@0.16.0`, `@xterm/addon-web-links@0.12.0`, `node-pty@1.1.0`
 - Persistence and validation: `electron-store@11.0.2`, `zod@4.4.3`, `uuid@14.0.1`
-- Build and test: `vite@7.3.6`, `@vitejs/plugin-react@5.2.0`, `typescript@6.0.3`, `vitest@4.1.10`, `@testing-library/react@16.3.2`, `@testing-library/jest-dom@6.9.1`, `jsdom@29.1.1`
+- Build and test: `vite@7.3.6`, `@vitejs/plugin-react@5.2.0`, `typescript@6.0.3`, `vitest@4.1.10`, `@testing-library/react@16.3.2`, `@testing-library/jest-dom@6.9.1`, `jsdom@26.1.0`
 - Quality tooling: `eslint@10.7.0`, `@eslint/js@10.0.1`, `typescript-eslint@8.64.0`, `eslint-plugin-react-hooks@7.1.1`, `eslint-plugin-react-refresh@0.5.3`, `prettier@3.9.5`
 
 ## Phase 1
@@ -89,3 +89,12 @@
 - Added sanitized diagnostics report generation, copy/report controls, rerun diagnostics, and log-directory opening through narrow IPC.
 - Added `README.md`, `docs/audio-assets.md`, and `docs/troubleshooting.md`.
 - Packaged build validation is host-dependent; this macOS workspace can build and smoke-test local output, while Windows directory packaging may be limited by cross-platform native module constraints.
+
+## Multi-Session Command Deck
+
+- Replaced the fixed 2x2 bay layout with a searchable navigator and one primary terminal, supporting up to 32 saved profiles with opaque IDs.
+- Added session creation and removal through validated IPC, selected-session persistence, visible directory identity, status filters, and terminal-safe keyboard navigation.
+- Retired the reserved Global Assistant. Every profile is an ordinary project session; a blank model adds no per-session override, while default launch arguments and Claude configuration still apply.
+- Added stable Claude conversation names. Fresh sessions use `--name` when discovered, and later continuation uses exact `--resume <name>` instead of ambiguous directory-most-recent behavior.
+- Kept recent terminal output in a bounded UTF-8-aware chunk replay so switching profiles restores context without persisting transcripts; clearing a terminal clears its replay too.
+- Pinned jsdom to 26.1.0 so the Vitest DOM environment remains usable on the repository's declared Node 20 baseline.
