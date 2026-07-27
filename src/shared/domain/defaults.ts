@@ -110,7 +110,7 @@ export function createDefaultRuntimeState(processState: SessionRuntimeState['pro
 export function createDefaultSettings(): ApplicationSettings {
   return {
     schemaVersion: SETTINGS_SCHEMA_VERSION,
-    shellExecutable: 'pwsh.exe',
+    shellKind: 'auto',
     claudeExecutable: 'claude',
     claudeBaseArgs: [],
     sessions: SESSION_IDS.map((id, index) => createDefaultSessionConfiguration(id, index + 1)),

@@ -31,6 +31,7 @@ describe('phase 2 process manager PTY integration', () => {
     const result = manager.startShell({
       sessionId: 'session-post-spawn-failure',
       workingDirectory: process.cwd(),
+      shellKind: 'auto',
       cols: 80,
       rows: 24,
     });
@@ -63,6 +64,7 @@ describe('phase 2 process manager PTY integration', () => {
       manager.startShell({
         sessionId,
         workingDirectory: process.cwd(),
+        shellKind: 'auto',
         cols: 80,
         rows: 24,
       }),
@@ -102,6 +104,7 @@ describe('phase 2 process manager PTY integration', () => {
     const startRequest = {
       sessionId,
       workingDirectory: process.cwd(),
+      shellKind: 'auto' as const,
       cols: 80,
       rows: 24,
     };

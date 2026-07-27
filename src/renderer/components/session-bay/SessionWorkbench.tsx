@@ -4,6 +4,8 @@ import type {
   SessionId,
   SessionLaunchMode,
   SessionSnapshot,
+  ShellKind,
+  ShellOption,
 } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
 import type { TerminalReplayStore } from '../../services/terminal/TerminalReplayStore';
@@ -14,7 +16,10 @@ interface SessionWorkbenchProps {
   terminalFocusRequest: number;
   onLaunchClaude: (sessionId: SessionId, launchMode: SessionLaunchMode) => void;
   onSelectDirectory: (sessionId: SessionId) => void;
-  onStartShell: (sessionId: SessionId) => void;
+  shellKind: ShellKind;
+  shellOptions: ShellOption[];
+  onUpdateShellKind: (shellKind: ShellKind) => void;
+  onStartShell: (sessionId: SessionId, shellKind: ShellKind) => void;
   onStopSession: (sessionId: SessionId) => void;
   onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
   terminalBridge: TerminalBridge;
@@ -33,6 +38,9 @@ export function SessionWorkbench({
   terminalFocusRequest,
   onLaunchClaude,
   onSelectDirectory,
+  shellKind,
+  shellOptions,
+  onUpdateShellKind,
   onStartShell,
   onStopSession,
   onUpdateSessionConfiguration,
@@ -59,6 +67,8 @@ export function SessionWorkbench({
     (option) => option.value === configuration.model.trim().toLowerCase(),
   );
   const customModel = configuration.model && !presetModel;
+  const selectedShellAvailable =
+    shellOptions.find((option) => option.kind === shellKind)?.available ?? shellKind === 'auto';
 
   return (
     <section className="session-workbench" aria-label={`${configuration.name} session controls`}>
@@ -132,15 +142,31 @@ export function SessionWorkbench({
                 <RotateCcw size={15} aria-hidden="true" />
                 <span>Resume…</span>
               </button>
-              <button
-                className="control-button"
-                type="button"
-                disabled={processAttached}
-                onClick={() => onStartShell(configuration.id)}
-              >
-                <TerminalSquare size={15} aria-hidden="true" />
-                <span>Shell</span>
-              </button>
+              <div className="shell-launch-control">
+                <select
+                  className="shell-select"
+                  aria-label={`${configuration.name} default shell for all new shell launches`}
+                  title="Default shell for all new shell launches"
+                  value={shellKind}
+                  onChange={(event) => onUpdateShellKind(event.currentTarget.value as ShellKind)}
+                >
+                  {shellOptions.map((option) => (
+                    <option key={option.kind} value={option.kind} disabled={!option.available}>
+                      {option.label}
+                      {option.available ? '' : ' (not found)'}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="control-button"
+                  type="button"
+                  disabled={processAttached || !selectedShellAvailable}
+                  onClick={() => onStartShell(configuration.id, shellKind)}
+                >
+                  <TerminalSquare size={15} aria-hidden="true" />
+                  <span>Shell</span>
+                </button>
+              </div>
             </>
           )}
           <button

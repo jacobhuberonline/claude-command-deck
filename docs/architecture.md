@@ -37,6 +37,8 @@ IPC contracts are defined in shared TypeScript types and Zod schemas. Main-proce
 
 Each managed PTY has an internal UUID, process type, opaque session ID, working directory, executable, arguments, PID, lifecycle timestamps, exit metadata, and restart generation. Terminal display lifecycle is separate from PTY lifecycle so switching the selected profile does not create duplicate processes. The renderer keeps a bounded, non-persistent output replay per session so the primary xterm can reconstruct recent scrollback after a switch.
 
+Shell launches use a typed preference rather than a renderer-supplied command string. The main process detects platform-appropriate options, resolves the selected executable, supplies fixed startup arguments, and reports an explicit missing-shell error instead of silently substituting another shell. Only the **Automatic** choice uses fallback discovery.
+
 ## Session State Model
 
 Process state and activity state are separate:
@@ -62,7 +64,7 @@ Renderer-side audio listens for semantic events and decides whether to play loca
 
 ## Persistence Boundaries
 
-Electron Store persists non-secret metadata only: opaque session IDs, display names, Claude conversation names, model overrides, directories, preferred executable and arguments, launch preferences, selected session, navigator layout, authentication command configuration, audio preferences, quiet hours, and diagnostics preferences. It does not persist terminal transcripts, terminal input, raw authentication output, environment dumps, access keys, session tokens, device codes, cookies, or bearer tokens.
+Electron Store persists non-secret metadata only: opaque session IDs, display names, Claude conversation names, model overrides, directories, preferred shell, Claude executable and arguments, launch preferences, selected session, navigator layout, authentication command configuration, audio preferences, quiet hours, and diagnostics preferences. It does not persist terminal transcripts, terminal input, raw authentication output, environment dumps, access keys, session tokens, device codes, cookies, or bearer tokens.
 
 ## Logging And Redaction
 

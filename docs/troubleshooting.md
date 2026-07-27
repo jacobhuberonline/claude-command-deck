@@ -10,7 +10,11 @@ If `npm run dev` prints `Error: Electron uninstall`, the Electron package instal
 
 ## PTY Fails To Start
 
-Run `npm install` again so the `postinstall` guard can repair the `node-pty` helper permissions. On Windows, verify PowerShell 7 (`pwsh.exe`) is installed or let the app fall back to Windows PowerShell.
+Run `npm install` again so the `postinstall` guard can repair the `node-pty` helper permissions. Choose **Automatic** to use the first detected platform-appropriate shell, or choose an explicit shell to receive a clear error when that executable is unavailable.
+
+## NuGet Is Not Found
+
+`nuget` is not specific to Command Prompt. Both PowerShell and Command Prompt can run `nuget.exe` when it is installed and on the app's inherited `PATH`. If `nuget.exe` is only in the current directory, PowerShell requires `.\nuget.exe pack`; for SDK-style projects, `dotnet pack` is commonly the intended command. A regular Command Prompt session is not the same as a Visual Studio Developer Command Prompt and does not automatically load Visual Studio tooling.
 
 ## Claude Is Missing
 

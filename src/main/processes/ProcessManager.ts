@@ -9,7 +9,7 @@ import {
 import type { CommandResult, StartShellRequest } from '../../shared/ipc/contracts';
 import type { SafeLogger } from '../logging/SafeLogger';
 import { resolveCommand } from './CommandResolution';
-import { discoverDefaultShell } from './ShellDiscovery';
+import { resolveShell } from './ShellDiscovery';
 import { PtyProcess } from './PtyProcess';
 
 interface ProcessManagerEvents {
@@ -47,7 +47,11 @@ export class ProcessManager {
   ) {}
 
   startShell(request: StartShellRequest): CommandResult {
-    const shell = discoverDefaultShell();
+    const resolution = resolveShell(request.shellKind);
+    if (!resolution.ok) {
+      return resolution;
+    }
+    const { shell } = resolution;
     return this.startManagedProcess({
       type: 'shellSession',
       sessionId: request.sessionId,

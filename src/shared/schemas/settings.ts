@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { MAX_SESSION_COUNT, SETTINGS_SCHEMA_VERSION } from '../domain/types';
+import { MAX_SESSION_COUNT, SETTINGS_SCHEMA_VERSION, SHELL_KINDS } from '../domain/types';
 
 export const sessionIdSchema = z.string().trim().min(1).max(128);
+export const shellKindSchema = z.enum(SHELL_KINDS);
 const launchModeSchema = z.enum(['new', 'continueMostRecent', 'resumeSpecific', 'custom']);
 const sessionRoleSchema = z.enum(['project', 'globalAssistant']);
 
@@ -83,7 +84,7 @@ export const notificationPreferencesSchema = z.object({
 export const applicationSettingsSchema = z
   .object({
     schemaVersion: z.literal(SETTINGS_SCHEMA_VERSION),
-    shellExecutable: z.string().min(1).max(512),
+    shellKind: shellKindSchema,
     claudeExecutable: z.string().min(1).max(512),
     claudeBaseArgs: z.array(z.string().max(2048)).max(64),
     sessions: z.array(sessionConfigurationSchema).min(1).max(MAX_SESSION_COUNT),

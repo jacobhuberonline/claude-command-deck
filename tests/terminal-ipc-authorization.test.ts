@@ -137,6 +137,7 @@ describe('terminal IPC session authorization', () => {
       invoke(IPC_CHANNELS.terminalStartShell, {
         sessionId: unknownSessionId,
         workingDirectory: '/renderer/project',
+        shellKind: 'commandPrompt',
         cols: 80,
         rows: 24,
       }),
@@ -179,10 +180,27 @@ describe('terminal IPC session authorization', () => {
     expect(processManagerMocks.stop).not.toHaveBeenCalled();
   });
 
-  it('starts a shell in the persisted directory instead of the renderer-supplied directory', async () => {
+  it('rejects an unsupported shell kind before reaching the process manager', async () => {
     const result = await invoke(IPC_CHANNELS.terminalStartShell, {
       sessionId,
       workingDirectory: '/renderer/supplied',
+      shellKind: 'arbitraryExecutable',
+      cols: 120,
+      rows: 40,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Invalid shell start request.',
+    });
+    expect(processManagerMocks.startShell).not.toHaveBeenCalled();
+  });
+
+  it('forwards the selected shell kind while enforcing the persisted directory', async () => {
+    const result = await invoke(IPC_CHANNELS.terminalStartShell, {
+      sessionId,
+      workingDirectory: '/renderer/supplied',
+      shellKind: 'commandPrompt',
       cols: 120,
       rows: 40,
     });
@@ -191,6 +209,7 @@ describe('terminal IPC session authorization', () => {
     expect(processManagerMocks.startShell).toHaveBeenCalledWith({
       sessionId,
       workingDirectory: persistedWorkingDirectory,
+      shellKind: 'commandPrompt',
       cols: 120,
       rows: 40,
     });

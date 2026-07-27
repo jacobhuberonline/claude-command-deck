@@ -17,6 +17,7 @@ import {
   updateClaudeConfigurationRequestSchema,
   updateDeckPreferencesRequestSchema,
   updateNotificationPreferencesRequestSchema,
+  updateShellConfigurationRequestSchema,
   updateSessionConfigurationRequestSchema,
   updateSessionAudioPreferencesRequestSchema,
 } from '../../shared/schemas/ipc';
@@ -158,6 +159,16 @@ export function registerAppStateHandlers(
     }
 
     settingsStore.updateAuthConfiguration(payload.data.auth);
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.appUpdateShellConfiguration, (_event, rawPayload): CommandResult => {
+    const payload = updateShellConfigurationRequestSchema.safeParse(rawPayload);
+    if (!payload.success) {
+      return { ok: false, error: 'Invalid shell preference.' };
+    }
+
+    settingsStore.updateShellConfiguration(payload.data.shellKind);
     return { ok: true };
   });
 

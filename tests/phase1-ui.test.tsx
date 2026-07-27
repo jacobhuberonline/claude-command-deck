@@ -88,7 +88,7 @@ describe('phase 1 visual shell', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Settings' });
     expect(within(dialog).getByRole('button', { name: 'Credential monitor' })).toBeInTheDocument();
-    expect(within(dialog).getByText('Schema v2')).toBeInTheDocument();
+    expect(within(dialog).getByText('Schema v3')).toBeInTheDocument();
   });
 
   it('handles bay focus shortcuts while terminal input is focused', async () => {
@@ -499,10 +499,77 @@ describe('phase 1 visual shell', () => {
       expect(startShell).toHaveBeenCalledWith({
         sessionId: 'session-2',
         workingDirectory: '/Users/example/project',
+        shellKind: 'auto',
         cols: 80,
         rows: 16,
       }),
     );
+  });
+
+  it('persists an inline shell selection and uses it for the next shell launch', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    snapshot.sessions[1]!.configuration.workingDirectory = '/Users/example/project';
+    const updateShellConfiguration = vi.fn(() => Promise.resolve({ ok: true as const }));
+    const startShell = vi.fn(() => Promise.resolve({ ok: true as const }));
+    const bridge = createMockBridge(snapshot, {}, { startShell });
+    bridge.updateShellConfiguration = updateShellConfiguration;
+    window.commandDeck = bridge;
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^2 Session 2/i }));
+    const article = await screen.findByRole('article', {
+      name: /Session 2 session bay/i,
+    });
+    const shellSelector = await within(article).findByRole('combobox', {
+      name: 'Session 2 default shell for all new shell launches',
+    });
+
+    fireEvent.change(shellSelector, { target: { value: 'commandPrompt' } });
+
+    await waitFor(() =>
+      expect(updateShellConfiguration).toHaveBeenCalledWith({ shellKind: 'commandPrompt' }),
+    );
+    fireEvent.click(within(article).getByRole('button', { name: 'Shell' }));
+
+    await waitFor(() =>
+      expect(startShell).toHaveBeenCalledWith({
+        sessionId: 'session-2',
+        workingDirectory: '/Users/example/project',
+        shellKind: 'commandPrompt',
+        cols: 80,
+        rows: 16,
+      }),
+    );
+  });
+
+  it('rolls back an inline shell selection when the preference cannot be saved', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    snapshot.sessions[0]!.configuration.workingDirectory = '/Users/example/project';
+    const updateShellConfiguration = vi.fn(() =>
+      Promise.resolve({ ok: false as const, error: 'Settings are unavailable.' }),
+    );
+    const bridge = createMockBridge(snapshot);
+    bridge.updateShellConfiguration = updateShellConfiguration;
+    window.commandDeck = bridge;
+
+    render(<App />);
+
+    const article = await screen.findByRole('article', {
+      name: /Session 1 session bay/i,
+    });
+    const shellSelector = await within(article).findByRole('combobox', {
+      name: 'Session 1 default shell for all new shell launches',
+    });
+
+    fireEvent.change(shellSelector, { target: { value: 'commandPrompt' } });
+
+    await waitFor(() =>
+      expect(updateShellConfiguration).toHaveBeenCalledWith({ shellKind: 'commandPrompt' }),
+    );
+    await waitFor(() => expect(shellSelector).toHaveValue('auto'));
   });
 
   it('verifies connected auth and starts refresh from one action when the check fails', async () => {
@@ -582,6 +649,7 @@ function createMockBridge(
       }),
     ),
     updateAuthConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
+    updateShellConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateClaudeConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateDeckPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
@@ -625,6 +693,12 @@ function createMockBridge(
       ...authOverrides,
     },
     terminal: {
+      getShellOptions: vi.fn(() =>
+        Promise.resolve([
+          { kind: 'auto' as const, label: 'Automatic', available: true },
+          { kind: 'commandPrompt' as const, label: 'Command Prompt', available: true },
+        ]),
+      ),
       startShell: vi.fn(() => Promise.resolve({ ok: true as const })),
       prepareClaude: vi.fn<CommandDeckBridge['terminal']['prepareClaude']>(({ launchMode }) =>
         Promise.resolve(successfulClaudePreparation(launchMode)),

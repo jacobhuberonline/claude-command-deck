@@ -31,6 +31,7 @@ import {
 } from '../../shared/schemas/ipc';
 import { discoverClaude } from '../claude/ClaudeDiscovery';
 import type { ProcessManager } from '../processes/ProcessManager';
+import { listShellOptionsAsync } from '../processes/ShellDiscovery';
 import type { SettingsStore } from '../persistence/SettingsStore';
 
 const launchPlanLifetimeMs = 5 * 60 * 1000;
@@ -87,6 +88,8 @@ export function registerTerminalHandlers(
   };
   const claudeLaunchPlans = new Map<SessionId, ClaudeLaunchPlan>();
   const claudePrepareGenerations = new Map<SessionId, number>();
+
+  ipcMain.handle(IPC_CHANNELS.terminalGetShellOptions, () => listShellOptionsAsync());
 
   ipcMain.handle(IPC_CHANNELS.terminalStartShell, (_event, rawPayload): CommandResult => {
     const payload = startShellRequestSchema.safeParse(rawPayload);

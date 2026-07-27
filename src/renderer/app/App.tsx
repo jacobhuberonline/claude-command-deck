@@ -20,6 +20,8 @@ import type {
   SessionConfiguration,
   SessionId,
   SessionLaunchMode,
+  ShellKind,
+  ShellOption,
   SettingsSection,
 } from '../../shared/domain/types';
 import type { CommandDeckBridge, CommandResult } from '../../shared/ipc/contracts';
@@ -39,6 +41,10 @@ import {
   parseClaudeUsageOutput,
   type ClaudeUsageSnapshot,
 } from '../services/usage/ClaudeUsageParser';
+
+const fallbackShellOptions: ShellOption[] = [
+  { kind: 'auto', label: 'Automatic (recommended)', available: true },
+];
 
 const fallbackBridge = {
   getAppState: () => Promise.resolve(createPhaseOneState('browser-preview')),
@@ -64,6 +70,7 @@ const fallbackBridge = {
   updateAuthConfiguration: () => Promise.resolve({ ok: true as const }),
   updateAudioPreferences: () => Promise.resolve({ ok: true as const }),
   updateClaudeConfiguration: () => Promise.resolve({ ok: true as const }),
+  updateShellConfiguration: () => Promise.resolve({ ok: true as const }),
   updateDeckPreferences: () => Promise.resolve({ ok: true as const }),
   updateNotificationPreferences: () => Promise.resolve({ ok: true as const }),
   updateSessionConfiguration: () => Promise.resolve({ ok: true as const }),
@@ -107,6 +114,7 @@ const fallbackBridge = {
     onExit: () => () => undefined,
   },
   terminal: {
+    getShellOptions: () => Promise.resolve([...fallbackShellOptions]),
     startShell: () =>
       Promise.resolve({ ok: false as const, error: 'Desktop shell is not available.' }),
     prepareClaude: () =>
@@ -177,6 +185,7 @@ export function App() {
   const [focusMode, setFocusMode] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [authConsoleOpen, setAuthConsoleOpen] = useState(false);
+  const [shellOptions, setShellOptions] = useState<ShellOption[]>(fallbackShellOptions);
   const [usageSnapshot, setUsageSnapshot] = useState<ClaudeUsageSnapshot | null>(() =>
     usageTrackerEnabled && typeof window !== 'undefined' ? loadStoredUsage() : null,
   );
@@ -420,6 +429,35 @@ export function App() {
       addSessionInFlightRef.current = false;
     }
   }, [addPreferenceDiagnostic, bridge]);
+
+  useEffect(() => {
+    if (!appStateLoaded) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    void bridge.terminal
+      .getShellOptions()
+      .then((options) => {
+        if (!cancelled) {
+          setShellOptions(options.length > 0 ? options : fallbackShellOptions);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setShellOptions(fallbackShellOptions);
+          addPreferenceDiagnostic(
+            'shell-discovery',
+            'Shell discovery',
+            error instanceof Error ? error.message : 'Unable to discover installed shells.',
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [addPreferenceDiagnostic, appStateLoaded, bridge]);
 
   useEffect(() => {
     let cancelled = false;
@@ -837,6 +875,42 @@ export function App() {
     }
   }
 
+  async function updateShellConfiguration(shellKind: ShellKind) {
+    const previousShellKind = appStateRef.current.settings.shellKind;
+    setAppState((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        shellKind,
+      },
+    }));
+
+    let result: CommandResult;
+    try {
+      result = await bridge.updateShellConfiguration({ shellKind });
+    } catch (error) {
+      result = {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Unable to save the shell preference.',
+      };
+    }
+
+    if (!result.ok) {
+      setAppState((current) =>
+        current.settings.shellKind === shellKind
+          ? {
+              ...current,
+              settings: {
+                ...current.settings,
+                shellKind: previousShellKind,
+              },
+            }
+          : current,
+      );
+      addPreferenceDiagnostic('shell-configuration', 'Shell configuration', result.error);
+    }
+  }
+
   async function updateNotificationPreferences(preferences: NotificationPreferences) {
     setAppState((current) => ({
       ...current,
@@ -994,11 +1068,11 @@ export function App() {
     }
   }
 
-  async function startShell(sessionId: SessionId): Promise<boolean> {
-    return withSessionOperation(sessionId, () => startShellUnlocked(sessionId));
+  async function startShell(sessionId: SessionId, shellKind: ShellKind): Promise<boolean> {
+    return withSessionOperation(sessionId, () => startShellUnlocked(sessionId, shellKind));
   }
 
-  async function startShellUnlocked(sessionId: SessionId): Promise<boolean> {
+  async function startShellUnlocked(sessionId: SessionId, shellKind: ShellKind): Promise<boolean> {
     const session = appStateRef.current.sessions.find(
       (candidate) => candidate.configuration.id === sessionId,
     );
@@ -1019,6 +1093,7 @@ export function App() {
     const result = await bridge.terminal.startShell({
       sessionId,
       workingDirectory: session.configuration.workingDirectory,
+      shellKind,
       cols: terminalSize.cols,
       rows: terminalSize.rows,
     });
@@ -1798,8 +1873,13 @@ export function App() {
             void removeSession(sessionId);
           }}
           onOpenSettings={() => setSettingsSection('claude')}
-          onStartShell={(sessionId) => {
-            void startShell(sessionId);
+          shellKind={appState.settings.shellKind}
+          shellOptions={shellOptions}
+          onUpdateShellKind={(shellKind) => {
+            void updateShellConfiguration(shellKind);
+          }}
+          onStartShell={(sessionId, shellKind) => {
+            void startShell(sessionId, shellKind);
           }}
           onLaunchClaude={(sessionId, launchMode) => {
             void launchFromMode(sessionId, launchMode);
@@ -1839,6 +1919,10 @@ export function App() {
         }}
         onUpdateClaudeConfiguration={(executable, baseArgs) => {
           void updateClaudeConfiguration(executable, baseArgs);
+        }}
+        shellOptions={shellOptions}
+        onUpdateShellConfiguration={(shellKind) => {
+          void updateShellConfiguration(shellKind);
         }}
         onUpdateAudioPreferences={(preferences) => {
           void updateAudioPreferences(preferences);

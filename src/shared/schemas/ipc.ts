@@ -6,6 +6,7 @@ import {
   sessionAudioPreferencesSchema,
   sessionConfigurationSchema,
   sessionIdSchema,
+  shellKindSchema,
 } from './settings';
 
 export { sessionIdSchema };
@@ -28,6 +29,10 @@ export const updateAudioPreferencesRequestSchema = z.object({
 
 export const updateAuthConfigurationRequestSchema = z.object({
   auth: authConfigurationSchema,
+});
+
+export const updateShellConfigurationRequestSchema = z.object({
+  shellKind: shellKindSchema,
 });
 
 export const updateClaudeConfigurationRequestSchema = z.object({
@@ -60,6 +65,7 @@ export const discoverClaudeRequestSchema = z.object({
 export const startShellRequestSchema = z.object({
   sessionId: sessionIdSchema,
   workingDirectory: z.string().max(4096),
+  shellKind: shellKindSchema,
   cols: z.number().int().min(2).max(500),
   rows: z.number().int().min(2).max(200),
 });

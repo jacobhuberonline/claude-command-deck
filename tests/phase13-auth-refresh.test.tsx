@@ -298,6 +298,7 @@ function createMockBridge(
       }),
     ),
     updateAuthConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
+    updateShellConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateClaudeConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateDeckPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
@@ -341,6 +342,7 @@ function createMockBridge(
       ...authOverrides,
     },
     terminal: {
+      getShellOptions: vi.fn(() => Promise.resolve([])),
       startShell: vi.fn(() => Promise.resolve({ ok: true as const })),
       prepareClaude: vi.fn(() =>
         Promise.resolve({

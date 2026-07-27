@@ -3,7 +3,7 @@ import {
   createDefaultSettings,
   normalizeApplicationSettings,
 } from '../src/shared/domain/defaults';
-import { MAX_SESSION_COUNT } from '../src/shared/domain/types';
+import { MAX_SESSION_COUNT, SHELL_KINDS } from '../src/shared/domain/types';
 import { applicationSettingsSchema } from '../src/shared/schemas/settings';
 
 describe('phase 5 settings validation', () => {
@@ -11,6 +11,18 @@ describe('phase 5 settings validation', () => {
     const parsed = applicationSettingsSchema.safeParse(createDefaultSettings());
 
     expect(parsed.success).toBe(true);
+  });
+
+  it('accepts only supported shell kinds and defaults to automatic discovery', () => {
+    const settings = createDefaultSettings();
+
+    expect(settings.shellKind).toBe('auto');
+    for (const shellKind of SHELL_KINDS) {
+      expect(applicationSettingsSchema.safeParse({ ...settings, shellKind }).success).toBe(true);
+    }
+    expect(
+      applicationSettingsSchema.safeParse({ ...settings, shellKind: 'unsupported-shell' }).success,
+    ).toBe(false);
   });
 
   it('uses four ordinary project profiles without forcing a model or executable override', () => {

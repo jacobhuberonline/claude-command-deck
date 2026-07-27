@@ -34,10 +34,12 @@ describe('phase 5 app-state mutation regressions', () => {
   const settings = createDefaultSettings();
   const updateSessionConfiguration = vi.fn();
   const updateSessionAudioPreferences = vi.fn();
+  const updateShellConfiguration = vi.fn();
   const settingsStore = {
     load: vi.fn(() => settings),
     updateSessionConfiguration,
     updateSessionAudioPreferences,
+    updateShellConfiguration,
   } as unknown as SettingsStore;
   const logger = {
     getLogDirectory: vi.fn(() => '/tmp/logs'),
@@ -78,6 +80,25 @@ describe('phase 5 app-state mutation regressions', () => {
       error: 'The selected session no longer exists.',
     });
     expect(updateSessionAudioPreferences).not.toHaveBeenCalled();
+  });
+
+  it('persists a validated shell preference', async () => {
+    const handler = getHandler(IPC_CHANNELS.appUpdateShellConfiguration);
+    const result = await handler(undefined, { shellKind: 'commandPrompt' });
+
+    expect(result).toEqual({ ok: true });
+    expect(updateShellConfiguration).toHaveBeenCalledWith('commandPrompt');
+  });
+
+  it('rejects an invalid shell preference without persisting it', async () => {
+    const handler = getHandler(IPC_CHANNELS.appUpdateShellConfiguration);
+    const result = await handler(undefined, { shellKind: 'not-a-shell' });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Invalid shell preference.',
+    });
+    expect(updateShellConfiguration).not.toHaveBeenCalled();
   });
 });
 

@@ -5,6 +5,8 @@ import type {
   SessionId,
   SessionLaunchMode,
   SessionSnapshot,
+  ShellKind,
+  ShellOption,
 } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
 import type { TerminalReplayStore } from '../../services/terminal/TerminalReplayStore';
@@ -22,7 +24,10 @@ interface SessionGridProps {
   onAddSession: () => void;
   onRemoveSession: (sessionId: SessionId) => void;
   onOpenSettings: () => void;
-  onStartShell: (sessionId: SessionId) => void;
+  shellKind: ShellKind;
+  shellOptions: ShellOption[];
+  onUpdateShellKind: (shellKind: ShellKind) => void;
+  onStartShell: (sessionId: SessionId, shellKind: ShellKind) => void;
   onLaunchClaude: (sessionId: SessionId, launchMode: SessionLaunchMode) => void;
   onSelectDirectory: (sessionId: SessionId) => void;
   onOpenDirectory: (sessionId: SessionId) => void;
@@ -43,6 +48,9 @@ export function SessionGrid({
   onAddSession,
   onRemoveSession,
   onOpenSettings,
+  shellKind,
+  shellOptions,
+  onUpdateShellKind,
   onStartShell,
   onLaunchClaude,
   onSelectDirectory,
@@ -278,6 +286,9 @@ export function SessionGrid({
             onFocus={() => onFocusSession(focused.configuration.id)}
             onToggleFocusMode={onToggleFocusMode}
             onOpenSettings={onOpenSettings}
+            shellKind={shellKind}
+            shellOptions={shellOptions}
+            onUpdateShellKind={onUpdateShellKind}
             onStartShell={onStartShell}
             onLaunchClaude={onLaunchClaude}
             onSelectDirectory={onSelectDirectory}

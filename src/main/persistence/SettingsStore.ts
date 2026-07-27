@@ -14,8 +14,9 @@ import type {
   SessionAudioPreferences,
   SessionConfiguration,
   SessionId,
+  ShellKind,
 } from '../../shared/domain/types';
-import { MAX_SESSION_COUNT, SETTINGS_SCHEMA_VERSION } from '../../shared/domain/types';
+import { MAX_SESSION_COUNT, SETTINGS_SCHEMA_VERSION, SHELL_KINDS } from '../../shared/domain/types';
 import { applicationSettingsSchema } from '../../shared/schemas/settings';
 import type { SafeLogger } from '../logging/SafeLogger';
 
@@ -214,6 +215,16 @@ export class SettingsStore {
     return next;
   }
 
+  updateShellConfiguration(shellKind: ShellKind): ApplicationSettings {
+    const current = this.load();
+    const next: ApplicationSettings = {
+      ...current,
+      shellKind,
+    };
+    this.save(next);
+    return next;
+  }
+
   updateDeckPreferences(focusedSessionId: SessionId, focusMode: boolean): ApplicationSettings {
     const current = this.load();
     const next: ApplicationSettings = {
@@ -266,23 +277,23 @@ export function migrateSettings(raw: unknown): unknown {
   }
 
   const candidate = raw as Partial<ApplicationSettings>;
-  if (candidate.schemaVersion === 1) {
-    return {
-      ...candidate,
-      schemaVersion: SETTINGS_SCHEMA_VERSION,
-      sessions: Array.isArray(candidate.sessions)
-        ? candidate.sessions.map((session) => ({
-            ...session,
-            executable: session.executable === 'claude' ? '' : session.executable,
-          }))
-        : candidate.sessions,
-    };
-  }
+  const sessions =
+    candidate.schemaVersion === 1 && Array.isArray(candidate.sessions)
+      ? candidate.sessions.map((session) => ({
+          ...session,
+          executable: session.executable === 'claude' ? '' : session.executable,
+        }))
+      : candidate.sessions;
+  const shellKind: ShellKind = SHELL_KINDS.includes(candidate.shellKind as ShellKind)
+    ? (candidate.shellKind as ShellKind)
+    : 'auto';
 
   return {
     ...createDefaultSettings(),
     ...candidate,
     schemaVersion: SETTINGS_SCHEMA_VERSION,
+    shellKind,
+    sessions,
     restoreOnLaunch: undefined,
   };
 }

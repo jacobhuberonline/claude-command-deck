@@ -1,6 +1,6 @@
 export const SESSION_IDS = ['session-1', 'session-2', 'session-3', 'session-4'] as const;
 export const MAX_SESSION_COUNT = 32;
-export const SETTINGS_SCHEMA_VERSION = 2;
+export const SETTINGS_SCHEMA_VERSION = 3;
 
 export type SessionId = string;
 
@@ -29,6 +29,23 @@ export type ActivityConfidence = 'low' | 'medium' | 'high';
 export type SessionLaunchMode = 'new' | 'continueMostRecent' | 'resumeSpecific' | 'custom';
 
 export type SessionRole = 'project' | 'globalAssistant';
+
+export const SHELL_KINDS = [
+  'auto',
+  'powershell7',
+  'windowsPowerShell',
+  'commandPrompt',
+  'bash',
+  'zsh',
+] as const;
+
+export type ShellKind = (typeof SHELL_KINDS)[number];
+
+export interface ShellOption {
+  kind: ShellKind;
+  label: string;
+  available: boolean;
+}
 
 export type ManagedProcessType = 'claudeSession' | 'shellSession' | 'authCheck' | 'authRefresh';
 
@@ -207,7 +224,7 @@ export interface NotificationPreferences {
 
 export interface ApplicationSettings {
   schemaVersion: number;
-  shellExecutable: string;
+  shellKind: ShellKind;
   claudeExecutable: string;
   claudeBaseArgs: string[];
   sessions: SessionConfiguration[];

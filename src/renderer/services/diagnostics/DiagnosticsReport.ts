@@ -24,7 +24,7 @@ export function buildSanitizedDiagnosticsReport(
     `Notification support: ${environment.notificationSupport}`,
     `Clipboard support: ${environment.clipboardSupport}`,
     `Claude executable: ${redactPathLikeValue(appState.settings.claudeExecutable)}`,
-    `Shell executable: ${redactPathLikeValue(appState.settings.shellExecutable)}`,
+    `Preferred shell: ${appState.settings.shellKind}`,
     `Auth provider: ${appState.settings.auth.provider}`,
     `Auth status: ${appState.auth.status}`,
     `Configured sessions: ${configuredSessions}/4`,

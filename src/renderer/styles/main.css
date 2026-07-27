@@ -196,6 +196,7 @@ h1 {
 .terminal-tool,
 .launch-mode-select,
 .model-select,
+.shell-select,
 .settings-nav button {
   border: 1px solid rgba(124, 151, 171, 0.22);
   border-radius: 7px;
@@ -234,6 +235,20 @@ h1 {
   font-size: 11px;
 }
 
+.shell-launch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shell-select {
+  min-height: 26px;
+  max-width: 150px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
 .icon-button,
 .terminal-tool {
   display: inline-grid;
@@ -249,7 +264,8 @@ h1 {
 
 .control-button:disabled,
 .icon-button:disabled,
-.terminal-tool:disabled {
+.terminal-tool:disabled,
+.shell-select:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
@@ -815,7 +831,8 @@ h1 {
   flex-wrap: wrap;
   justify-content: end;
   gap: 6px;
-  flex: 0 0 auto;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .workbench-actions .control-button {

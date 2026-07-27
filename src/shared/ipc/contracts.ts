@@ -10,6 +10,8 @@ import type {
   SessionConfiguration,
   SessionId,
   SessionLaunchMode,
+  ShellKind,
+  ShellOption,
 } from '../domain/types';
 
 export type AppShortcut = 'openSessionSwitcher' | 'addSession';
@@ -36,6 +38,10 @@ export interface UpdateAudioPreferencesRequest {
 
 export interface UpdateAuthConfigurationRequest {
   auth: AuthConfiguration;
+}
+
+export interface UpdateShellConfigurationRequest {
+  shellKind: ShellKind;
 }
 
 export interface UpdateNotificationPreferencesRequest {
@@ -95,6 +101,7 @@ export type CommandResult =
 export interface StartShellRequest {
   sessionId: SessionId;
   workingDirectory: string;
+  shellKind: ShellKind;
   cols: number;
   rows: number;
 }
@@ -214,6 +221,7 @@ export interface AuthBridge {
 }
 
 export interface TerminalBridge {
+  getShellOptions: () => Promise<ShellOption[]>;
   startShell: (request: StartShellRequest) => Promise<CommandResult>;
   prepareClaude: (request: PrepareClaudeLaunchRequest) => Promise<PrepareClaudeLaunchResult>;
   startClaude: (request: StartClaudeRequest) => Promise<StartClaudeResult>;
@@ -238,6 +246,7 @@ export interface CommandDeckBridge {
   openLogDirectory: () => Promise<CommandResult>;
   selectDirectory: (request: SelectDirectoryRequest) => Promise<SelectDirectoryResult>;
   updateAuthConfiguration: (request: UpdateAuthConfigurationRequest) => Promise<CommandResult>;
+  updateShellConfiguration: (request: UpdateShellConfigurationRequest) => Promise<CommandResult>;
   updateClaudeConfiguration: (request: UpdateClaudeConfigurationRequest) => Promise<CommandResult>;
   updateDeckPreferences: (request: UpdateDeckPreferencesRequest) => Promise<CommandResult>;
   updateAudioPreferences: (request: UpdateAudioPreferencesRequest) => Promise<CommandResult>;

@@ -14,6 +14,8 @@ import type {
   SessionId,
   SessionLaunchMode,
   SessionSnapshot,
+  ShellKind,
+  ShellOption,
 } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
 import type { TerminalReplayStore } from '../../services/terminal/TerminalReplayStore';
@@ -28,7 +30,10 @@ interface SessionBayProps {
   onFocus: () => void;
   onToggleFocusMode: () => void;
   onOpenSettings: () => void;
-  onStartShell: (sessionId: SessionId) => void;
+  shellKind: ShellKind;
+  shellOptions: ShellOption[];
+  onUpdateShellKind: (shellKind: ShellKind) => void;
+  onStartShell: (sessionId: SessionId, shellKind: ShellKind) => void;
   onLaunchClaude: (sessionId: SessionId, launchMode: SessionLaunchMode) => void;
   onSelectDirectory: (sessionId: SessionId) => void;
   onOpenDirectory: (sessionId: SessionId) => void;
@@ -69,6 +74,9 @@ export function SessionBay({
   onFocus,
   onToggleFocusMode,
   onOpenSettings,
+  shellKind,
+  shellOptions,
+  onUpdateShellKind,
   onStartShell,
   onLaunchClaude,
   onSelectDirectory,
@@ -88,6 +96,8 @@ export function SessionBay({
   const directoryChangeDisabled =
     ['starting', 'running', 'restarting', 'stopping'].includes(runtime.processState) ||
     (runtime.processState === 'error' && runtime.processType !== undefined);
+  const selectedShellAvailable =
+    shellOptions.find((option) => option.kind === shellKind)?.available ?? shellKind === 'auto';
   const [selectedLaunchMode, setSelectedLaunchMode] = useState<SessionLaunchMode>(
     configuration.launchMode,
   );
@@ -161,6 +171,9 @@ export function SessionBay({
           terminalFocusRequest={terminalFocusRequest}
           onLaunchClaude={onLaunchClaude}
           onSelectDirectory={onSelectDirectory}
+          shellKind={shellKind}
+          shellOptions={shellOptions}
+          onUpdateShellKind={onUpdateShellKind}
           onStartShell={onStartShell}
           onStopSession={onStopSession}
           onUpdateSessionConfiguration={onUpdateSessionConfiguration}
@@ -198,16 +211,33 @@ export function SessionBay({
                 <option value="resumeSpecific">Resume...</option>
               </select>
             ) : null}
-            <button
-              className="control-button"
-              type="button"
-              onClick={() => {
-                void onStartShell(configuration.id);
-              }}
-            >
-              <TerminalSquare size={15} aria-hidden="true" />
-              <span>Shell</span>
-            </button>
+            <div className="shell-launch-control">
+              <select
+                className="shell-select"
+                aria-label={`${configuration.name} default shell for all new shell launches`}
+                title="Default shell for all new shell launches"
+                value={shellKind}
+                onChange={(event) => onUpdateShellKind(event.currentTarget.value as ShellKind)}
+              >
+                {shellOptions.map((option) => (
+                  <option key={option.kind} value={option.kind} disabled={!option.available}>
+                    {option.label}
+                    {option.available ? '' : ' (not found)'}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="control-button"
+                type="button"
+                disabled={directoryChangeDisabled || !selectedShellAvailable}
+                onClick={() => {
+                  void onStartShell(configuration.id, shellKind);
+                }}
+              >
+                <TerminalSquare size={15} aria-hidden="true" />
+                <span>Shell</span>
+              </button>
+            </div>
             <button
               className="icon-button quiet"
               type="button"

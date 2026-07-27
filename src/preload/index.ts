@@ -53,6 +53,11 @@ const bridge: CommandDeckBridge = {
       Awaited<ReturnType<CommandDeckBridge['updateAuthConfiguration']>>
     >;
   },
+  updateShellConfiguration: (request) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateShellConfiguration, request) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['updateShellConfiguration']>>
+    >;
+  },
   updateClaudeConfiguration: (request) => {
     return ipcRenderer.invoke(IPC_CHANNELS.appUpdateClaudeConfiguration, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['updateClaudeConfiguration']>>
@@ -122,6 +127,10 @@ const bridge: CommandDeckBridge = {
     },
   },
   terminal: {
+    getShellOptions: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.terminalGetShellOptions) as Promise<
+        Awaited<ReturnType<CommandDeckBridge['terminal']['getShellOptions']>>
+      >,
     startShell: (request) => {
       return ipcRenderer.invoke(IPC_CHANNELS.terminalStartShell, request) as Promise<
         Awaited<ReturnType<CommandDeckBridge['terminal']['startShell']>>

@@ -97,4 +97,5 @@
 - Retired the reserved Global Assistant. Every profile is an ordinary project session; a blank model adds no per-session override, while default launch arguments and Claude configuration still apply.
 - Added stable Claude conversation names. Fresh sessions use `--name` when discovered, and later continuation uses exact `--resume <name>` instead of ambiguous directory-most-recent behavior.
 - Kept recent terminal output in a bounded UTF-8-aware chunk replay so switching profiles restores context without persisting transcripts; clearing a terminal clears its replay too.
+- Replaced the unused shell-executable display with a typed, persisted selector. Shell availability and executable resolution remain in the main process; explicit selections never silently fall back.
 - Pinned jsdom to 26.1.0 so the Vitest DOM environment remains usable on the repository's declared Node 20 baseline.

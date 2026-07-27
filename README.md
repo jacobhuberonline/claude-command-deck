@@ -8,7 +8,7 @@ Local Electron desktop app for supervising many Claude Code sessions across diff
 - Jump to the first nine saved sessions with `Alt+1` through `Alt+9`.
 - Cycle sessions with `Ctrl+PageUp` and `Ctrl+PageDown`.
 - Focus session search with `Ctrl+Shift+P`.
-- Start a fresh named Claude conversation, continue that exact conversation later, open the native resume picker, or use a normal shell.
+- Start a fresh named Claude conversation, continue that exact conversation later, open the native resume picker, or choose a detected shell for a normal terminal session.
 - Add an optional per-session Haiku, Sonnet, Opus, or custom model override; blank sessions keep the configured default launch arguments.
 
 ## Commands

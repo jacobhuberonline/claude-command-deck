@@ -39,9 +39,19 @@ describe('phase 5 settings migration regressions', () => {
 
     const loaded = new SettingsStore(logger).load();
 
-    expect(loaded.schemaVersion).toBe(2);
+    expect(loaded.schemaVersion).toBe(3);
     expect(loaded.sessions[0]?.executable).toBe('');
     expect(loaded.sessions[1]?.executable).toBe('/opt/claude-custom');
+  });
+
+  it('migrates v2 shell settings to automatic discovery without retaining the legacy field', () => {
+    storeState.settings = createVersionTwoSettings();
+
+    const loaded = new SettingsStore(logger).load();
+
+    expect(loaded.schemaVersion).toBe(3);
+    expect(loaded.shellKind).toBe('auto');
+    expect(loaded).not.toHaveProperty('shellExecutable');
   });
 
   it('preserves an unnamed v1 continue-most-recent session as legacy-continuable', () => {
@@ -104,9 +114,22 @@ describe('phase 5 settings migration regressions', () => {
 
 function createVersionOneSettings() {
   const current = createDefaultSettings();
+  const legacy = { ...current, shellExecutable: 'pwsh.exe' };
+  Reflect.deleteProperty(legacy, 'shellKind');
   return {
-    ...current,
+    ...legacy,
     schemaVersion: 1,
+    sessions: current.sessions.map((session) => ({ ...session })),
+  };
+}
+
+function createVersionTwoSettings() {
+  const current = createDefaultSettings();
+  const legacy = { ...current, shellExecutable: 'pwsh.exe' };
+  Reflect.deleteProperty(legacy, 'shellKind');
+  return {
+    ...legacy,
+    schemaVersion: 2,
     sessions: current.sessions.map((session) => ({ ...session })),
   };
 }

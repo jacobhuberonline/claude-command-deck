@@ -9,6 +9,8 @@ import type {
   SessionAudioPreferences,
   SessionConfiguration,
   SessionId,
+  ShellKind,
+  ShellOption,
   SettingsSection,
 } from '../../../shared/domain/types';
 import { buildSanitizedDiagnosticsReport } from '../../services/diagnostics/DiagnosticsReport';
@@ -20,6 +22,8 @@ interface SettingsPanelProps {
   onClose: () => void;
   onUpdateAuthConfiguration: (auth: AuthConfiguration) => void;
   onUpdateClaudeConfiguration: (executable: string, baseArgs: string[]) => void;
+  shellOptions: ShellOption[];
+  onUpdateShellConfiguration: (shellKind: ShellKind) => void;
   onUpdateAudioPreferences: (preferences: AudioPreferences) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
   onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
@@ -51,6 +55,8 @@ export function SettingsPanel({
   onClose,
   onUpdateAuthConfiguration,
   onUpdateClaudeConfiguration,
+  shellOptions,
+  onUpdateShellConfiguration,
   onUpdateAudioPreferences,
   onUpdateNotificationPreferences,
   onUpdateSessionConfiguration,
@@ -105,6 +111,8 @@ export function SettingsPanel({
               section={section}
               onUpdateAuthConfiguration={onUpdateAuthConfiguration}
               onUpdateClaudeConfiguration={onUpdateClaudeConfiguration}
+              shellOptions={shellOptions}
+              onUpdateShellConfiguration={onUpdateShellConfiguration}
               onUpdateAudioPreferences={onUpdateAudioPreferences}
               onUpdateNotificationPreferences={onUpdateNotificationPreferences}
               onUpdateSessionConfiguration={onUpdateSessionConfiguration}
@@ -127,6 +135,8 @@ function SettingsSectionContent({
   onUpdateAudioPreferences,
   onUpdateAuthConfiguration,
   onUpdateClaudeConfiguration,
+  shellOptions,
+  onUpdateShellConfiguration,
   onUpdateNotificationPreferences,
   onUpdateSessionConfiguration,
   onUpdateSessionAudioPreferences,
@@ -140,6 +150,8 @@ function SettingsSectionContent({
   onUpdateAudioPreferences: (preferences: AudioPreferences) => void;
   onUpdateAuthConfiguration: (auth: AuthConfiguration) => void;
   onUpdateClaudeConfiguration: (executable: string, baseArgs: string[]) => void;
+  shellOptions: ShellOption[];
+  onUpdateShellConfiguration: (shellKind: ShellKind) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
   onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
   onUpdateSessionAudioPreferences: (
@@ -162,6 +174,16 @@ function SettingsSectionContent({
         onUpdateClaudeConfiguration={onUpdateClaudeConfiguration}
         onUpdateSessionConfiguration={onUpdateSessionConfiguration}
         onSelectDirectory={onSelectDirectory}
+      />
+    );
+  }
+
+  if (section === 'shell') {
+    return (
+      <ShellSettings
+        shellKind={appState.settings.shellKind}
+        shellOptions={shellOptions}
+        onUpdate={onUpdateShellConfiguration}
       />
     );
   }
@@ -227,7 +249,6 @@ function SettingsSectionContent({
     <>
       <h3>{sections.find((item) => item.id === section)?.label}</h3>
       <Field label="Claude executable" value={appState.settings.claudeExecutable} />
-      <Field label="Shell executable" value={appState.settings.shellExecutable} />
       <Field label="Restore running sessions" value="Disabled by default" />
     </>
   );
@@ -245,6 +266,48 @@ function GeneralSettings({ appState }: { appState: AppStateSnapshot }) {
         label="Terminal transcripts"
         value="Buffered in memory for switching; never persisted"
       />
+    </>
+  );
+}
+
+function ShellSettings({
+  shellKind,
+  shellOptions,
+  onUpdate,
+}: {
+  shellKind: ShellKind;
+  shellOptions: ShellOption[];
+  onUpdate: (shellKind: ShellKind) => void;
+}) {
+  return (
+    <>
+      <h3>Shell</h3>
+      <label className="settings-field" htmlFor="default-shell">
+        <span>Default shell</span>
+        <select
+          id="default-shell"
+          className="settings-text-input"
+          value={shellKind}
+          aria-describedby="default-shell-hint"
+          onChange={(event) => onUpdate(event.currentTarget.value as ShellKind)}
+        >
+          {shellOptions.map((option) => (
+            <option key={option.kind} value={option.kind} disabled={!option.available}>
+              {option.label}
+              {option.available ? '' : ' (not found)'}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="settings-hint" id="default-shell-hint">
+        This choice applies only when starting a new shell process. A terminal that is already
+        running keeps its current shell. Automatic selects an installed shell that fits your
+        operating system.
+      </p>
+      <p className="settings-hint">
+        Switching shells does not install command-line tools; commands such as NuGet must still be
+        installed and available on PATH.
+      </p>
     </>
   );
 }

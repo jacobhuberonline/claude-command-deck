@@ -7,7 +7,7 @@ Claude Command Deck is a local Windows-first desktop app for supervising many re
 ## Core Workflows
 
 - Configure up to 32 saved session profiles with names, working directories, commands, models, and audio preferences.
-- Find sessions by name or path and keep one large interactive PowerShell or Claude Code PTY in focus.
+- Find sessions by name or path and keep one large interactive shell or Claude Code PTY in focus.
 - See truthful process state, conservative activity state, and same-project ambiguity at a glance.
 - Reload one session or all sessions so startup-loaded Claude configuration can be reread.
 - Name fresh Claude conversations and resume the exact name when the installed CLI exposes supported flags.
@@ -19,7 +19,7 @@ Claude Command Deck is a local Windows-first desktop app for supervising many re
 - Secure Electron shell launches without a blank renderer.
 - A searchable session navigator and primary terminal render across desktop widths.
 - PTY input, ANSI output, scrollback, resize, copy, paste, process exit, and cleanup work.
-- Shell discovery prefers PowerShell 7 on Windows and falls back safely.
+- Shell discovery offers platform-appropriate choices, remembers the preference, and falls back safely only in Automatic mode.
 - Claude command discovery reports executable, version, and continuation support honestly.
 - Continue and Fresh Start preserve session configuration and report the actual launch strategy.
 - Restart Active sequences only live Claude sessions and summarizes results.

@@ -8,6 +8,9 @@ export function resolveCommand(
   const result = spawnSync(resolver, [command], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
+    timeout: 5000,
+    maxBuffer: 64 * 1024,
+    windowsHide: true,
   });
 
   if (result.status !== 0 || !result.stdout.trim()) {
