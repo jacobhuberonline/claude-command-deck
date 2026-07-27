@@ -58,9 +58,9 @@ export const defaultNotificationPreferences: NotificationPreferences = {
 };
 
 export const defaultAuthConfiguration: AuthConfiguration = {
-  provider: 'aws',
-  checkExecutable: 'aws',
-  checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
+  provider: 'disabled',
+  checkExecutable: '',
+  checkArgs: [],
   refreshExecutable: '',
   refreshArgs: [],
   workingDirectory: '',
@@ -68,7 +68,7 @@ export const defaultAuthConfiguration: AuthConfiguration = {
   checkIntervalSeconds: 3600,
   checkTimeoutSeconds: 15,
   expirationWarningMinutes: 15,
-  startupChecksEnabled: true,
+  startupChecksEnabled: false,
   nativeNotificationsEnabled: true,
 };
 
@@ -113,7 +113,7 @@ export function createDefaultSettings(): ApplicationSettings {
     shellKind: 'auto',
     claudeExecutable: 'claude',
     claudeBaseArgs: [],
-    sessions: SESSION_IDS.map((id, index) => createDefaultSessionConfiguration(id, index + 1)),
+    sessions: [createDefaultSessionConfiguration(SESSION_IDS[0], 1)],
     focusedSessionId: 'session-1',
     focusMode: false,
     auth: { ...defaultAuthConfiguration },

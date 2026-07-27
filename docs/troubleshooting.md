@@ -34,4 +34,4 @@ Native notifications are optional and require renderer notification support plus
 
 ## Windows Build
 
-`npm run package:win` attempts a Windows development directory build. Cross-building may be limited on non-Windows hosts by native modules, host tooling, or downloaded Electron Builder components.
+`npm run package:win` creates an NSIS installer. Use `npm run package:win:dir` for a faster unpacked smoke build. Cross-building may be limited on non-Windows hosts by native modules, host tooling, or downloaded Electron Builder components; the CI workflow performs the unpacked build on Windows.

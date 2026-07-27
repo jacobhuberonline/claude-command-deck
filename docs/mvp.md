@@ -33,8 +33,8 @@ Claude Command Deck is a local Windows-first desktop app for supervising many re
 
 - Remote access, team collaboration, telemetry, cloud sync, user accounts, automatic Git actions, worktree orchestration, Codex/Gemini integration, agent-to-agent delegation, plugin marketplace, full terminal recording, and automatic approval of Claude prompts.
 
-## Known Phase 0 Limitations
+## Current Release Constraints
 
-- The first implementation will include macOS/Linux shell fallbacks only for local validation. Windows PowerShell discovery remains the production priority.
-- Packaged Windows smoke testing may be limited by the current macOS workspace.
+- CI validates source, real PTY behavior, production builds, and an unpacked Windows package. Interactive Windows installer and terminal smoke testing remain release-checklist items.
+- The Windows installer is not code-signed until a publisher certificate and protected CI signing configuration are supplied.
 - Exact Claude continuation support depends on the locally installed Claude CLI and is discovered at runtime rather than assumed.

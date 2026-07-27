@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react';
 import { FolderPen, X } from 'lucide-react';
 import type {
   AppStateSnapshot,
@@ -437,6 +438,26 @@ function AuthenticationSettings({
   onUpdate: (auth: AuthConfiguration) => void;
 }) {
   const update = (patch: Partial<AuthConfiguration>) => onUpdate({ ...auth, ...patch });
+  const selectProvider = (provider: AuthProvider) => {
+    if (provider === 'aws') {
+      onUpdate({
+        ...auth,
+        provider,
+        checkExecutable: auth.checkExecutable.trim() || 'aws',
+        checkArgs:
+          auth.checkArgs.length > 0
+            ? auth.checkArgs
+            : ['sts', 'get-caller-identity', '--output', 'json'],
+      });
+      return;
+    }
+
+    onUpdate({
+      ...auth,
+      provider,
+      ...(provider === 'disabled' ? { startupChecksEnabled: false } : {}),
+    });
+  };
 
   return (
     <>
@@ -450,7 +471,7 @@ function AuthenticationSettings({
         <select
           className="settings-text-input"
           value={auth.provider}
-          onChange={(event) => update({ provider: event.currentTarget.value as AuthProvider })}
+          onChange={(event) => selectProvider(event.currentTarget.value as AuthProvider)}
         >
           <option value="aws">AWS</option>
           <option value="custom">Custom</option>
@@ -798,15 +819,30 @@ function TextField({
   placeholder?: string;
   onChange: (value: string) => void;
 }) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.currentTarget.blur();
+    } else if (event.key === 'Escape') {
+      event.currentTarget.value = value;
+      event.currentTarget.blur();
+    }
+  };
+
   return (
     <label className="settings-field">
       <span>{label}</span>
       <input
+        key={value}
         className="settings-text-input"
         type="text"
-        value={value}
+        defaultValue={value}
         placeholder={placeholder}
-        onChange={(event) => onChange(event.currentTarget.value)}
+        onBlur={(event) => {
+          if (event.currentTarget.value !== value) {
+            onChange(event.currentTarget.value);
+          }
+        }}
+        onKeyDown={handleKeyDown}
       />
     </label>
   );
@@ -825,23 +861,30 @@ function ArgsField({
 }) {
   const valueText = value.join('\n');
   const commit = (draft: string) => {
-    onChange(
-      draft
-        .split('\n')
-        .map((item) => item.trim())
-        .filter(Boolean),
-    );
+    const nextValue = draft
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (nextValue.join('\n') !== valueText) {
+      onChange(nextValue);
+    }
   };
 
   return (
     <label className="settings-field settings-field-stack">
       <span>{label}</span>
       <textarea
+        key={valueText}
         className="settings-text-input settings-text-area"
         defaultValue={valueText}
         placeholder={placeholder}
-        onChange={(event) => commit(event.currentTarget.value)}
         onBlur={(event) => commit(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.currentTarget.value = valueText;
+            event.currentTarget.blur();
+          }
+        }}
       />
     </label>
   );

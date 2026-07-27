@@ -16,10 +16,12 @@ Local Electron desktop app for supervising many Claude Code sessions across diff
 - `npm run dev` starts the Electron development app.
 - `npm run build` type-checks and builds main, preload, and renderer output.
 - `npm run test` runs Vitest.
+- `npm run test:coverage` runs Vitest with enforced baseline coverage.
 - `npm run lint` runs ESLint.
 - `npm run format` checks Prettier formatting.
 - `npm run package:dir` creates a local unpacked development build.
-- `npm run package:win` attempts a Windows directory build when the host environment permits.
+- `npm run package:win` creates a Windows NSIS installer when the host environment permits.
+- `npm run package:win:dir` creates an unpacked Windows build for smoke testing.
 - `npm run generate:sounds` regenerates the original local WAV assets in `public/sounds`.
 
 ## Security Boundaries
@@ -28,6 +30,6 @@ The renderer runs with `contextIsolation`, sandboxing, and no Node integration. 
 
 ## MVP Notes
 
-The app is Windows-first but includes macOS/Linux fallbacks for local validation. Claude continuation and naming support are discovered from the selected executable; the same executable is then launched. The optional credential monitor reports only its configured AWS or custom check; it does not directly inspect running Claude sessions.
+The app is Windows-first but includes macOS/Linux fallbacks for local validation. Claude continuation and naming support are discovered from the selected executable; the same executable is then launched. New installations begin with one empty session and the optional credential monitor disabled. When enabled, the monitor reports only its configured AWS or custom check; it does not directly inspect running Claude sessions.
 
 Up to 32 saved session profiles are supported. Terminal output is bounded and buffered only in renderer memory so switching sessions can reconstruct recent scrollback without persisting transcripts.

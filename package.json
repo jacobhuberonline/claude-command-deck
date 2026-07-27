@@ -2,7 +2,9 @@
   "name": "claude-command-deck",
   "version": "0.1.0",
   "description": "Windows-first local desktop command deck for managing multiple Claude Code sessions.",
+  "author": "Claude Command Deck contributors",
   "private": true,
+  "packageManager": "npm@10.9.3",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
@@ -13,11 +15,13 @@
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "postinstall": "node scripts/ensure-node-pty-helper.mjs && node scripts/ensure-electron.mjs",
     "generate:sounds": "tsx scripts/generate-sounds.ts",
     "package:dir": "electron-builder --dir",
-    "package:win": "electron-builder --win --dir"
+    "package:win": "electron-builder --win",
+    "package:win:dir": "electron-builder --win --dir"
   },
   "build": {
     "appId": "local.claude-command-deck",
@@ -30,17 +34,31 @@
       "assets/**",
       "package.json"
     ],
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
     "mac": {
       "identity": null
     },
     "win": {
       "target": [
-        "dir"
+        "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.13.0"
+  },
+  "overrides": {
+    "app-builder-lib": {
+      "@noble/hashes": "1.8.0"
+    }
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

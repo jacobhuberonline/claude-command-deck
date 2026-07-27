@@ -45,6 +45,7 @@ export function TerminalPane({
   const suppressNativePasteUntilRef = useRef(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
   const setTerminalFontSize = useCallback((nextFontSize: number) => {
     const terminal = terminalRef.current;
     if (!terminal) {
@@ -202,19 +203,6 @@ export function TerminalPane({
         .catch(() => undefined);
     });
 
-    const offExit = terminalBridge.onExit((event) => {
-      if (event.sessionId === session.configuration.id) {
-        terminal.writeln('');
-        if (event.crashed) {
-          terminal.writeln(
-            `\x1b[31mLOCAL SYSTEM\x1b[0m Process exited unexpectedly with code ${event.exitCode ?? 'unknown'}.`,
-          );
-        } else {
-          terminal.writeln('\x1b[33mLOCAL SYSTEM\x1b[0m Process stopped.');
-        }
-      }
-    });
-
     const resize = () => {
       try {
         fitAddon.fit();
@@ -264,7 +252,6 @@ export function TerminalPane({
       container.removeEventListener('wheel', onWheel);
       resizeObserver?.disconnect();
       offReplay();
-      offExit();
       dataDisposable.dispose();
       terminal.dispose();
       terminalRef.current = null;

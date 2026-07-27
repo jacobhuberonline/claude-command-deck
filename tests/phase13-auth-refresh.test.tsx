@@ -21,6 +21,9 @@ describe('phase 13 authentication refresh orchestration', () => {
     const lastCheckedAt = new Date(Date.now() - 120_000).toISOString();
     snapshot.settings.auth = {
       ...snapshot.settings.auth,
+      provider: 'aws',
+      checkExecutable: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
       startupChecksEnabled: false,
       refreshExecutable: 'aws',
       refreshArgs: ['sso', 'login'],
@@ -57,7 +60,9 @@ describe('phase 13 authentication refresh orchestration', () => {
       expect(authButton).toHaveAttribute('title', expect.stringContaining('Connected')),
     );
 
-    window.dispatchEvent(new Event('focus'));
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
 
     await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(1));
@@ -67,6 +72,9 @@ describe('phase 13 authentication refresh orchestration', () => {
     const snapshot = createPhaseOneState('test');
     snapshot.settings.auth = {
       ...snapshot.settings.auth,
+      provider: 'aws',
+      checkExecutable: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
       startupChecksEnabled: true,
       refreshExecutable: 'aws',
       refreshArgs: ['sso', 'login'],
@@ -110,6 +118,9 @@ describe('phase 13 authentication refresh orchestration', () => {
     const lastCheckedAt = new Date(Date.now() - 120_000).toISOString();
     snapshot.settings.auth = {
       ...snapshot.settings.auth,
+      provider: 'aws',
+      checkExecutable: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
       startupChecksEnabled: false,
       refreshExecutable: 'aws',
       refreshArgs: ['sso', 'login'],
@@ -143,7 +154,9 @@ describe('phase 13 authentication refresh orchestration', () => {
 
     render(<App />);
     await screen.findByRole('button', { name: /Open credential monitor/i });
-    window.dispatchEvent(new Event('focus'));
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
 
     await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
     expect(startRefresh).not.toHaveBeenCalled();
@@ -159,7 +172,13 @@ describe('phase 13 authentication refresh orchestration', () => {
 
   it('rechecks credentials instead of treating a cancelled login as disconnection', async () => {
     const snapshot = createPhaseOneState('test');
-    snapshot.settings.auth.startupChecksEnabled = false;
+    snapshot.settings.auth = {
+      ...snapshot.settings.auth,
+      provider: 'aws',
+      checkExecutable: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
+      startupChecksEnabled: false,
+    };
     const checkedAt = new Date().toISOString();
     snapshot.auth = {
       provider: 'aws',
@@ -208,6 +227,9 @@ describe('phase 13 authentication refresh orchestration', () => {
     const checkedAt = new Date().toISOString();
     snapshot.settings.auth = {
       ...snapshot.settings.auth,
+      provider: 'aws',
+      checkExecutable: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
       startupChecksEnabled: false,
       refreshExecutable: 'aws',
       refreshArgs: ['sso', 'login'],

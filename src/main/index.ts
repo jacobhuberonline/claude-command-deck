@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
 import { AuthService } from './auth/AuthService';
 import { registerAppStateHandlers } from './ipc/appState';
@@ -71,4 +71,10 @@ async function bootstrap(): Promise<void> {
   createMainWindow();
 }
 
-void bootstrap();
+void bootstrap().catch(() => {
+  dialog.showErrorBox(
+    'Claude Command Deck could not start',
+    'The application failed during startup. Restart it and review the local logs if the problem continues.',
+  );
+  app.exit(1);
+});

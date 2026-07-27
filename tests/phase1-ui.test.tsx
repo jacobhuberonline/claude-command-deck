@@ -24,7 +24,7 @@ describe('phase 1 visual shell', () => {
         name: /Open credential monitor/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.getByRole('searchbox', { name: 'Find a session' })).toBeInTheDocument();
   });
@@ -55,7 +55,7 @@ describe('phase 1 visual shell', () => {
   });
 
   it('highlights search results with arrows and activates only on Enter', async () => {
-    const snapshot = createPhaseOneState('test');
+    const snapshot = createMultiSessionState();
     snapshot.settings.auth.startupChecksEnabled = false;
     window.commandDeck = createMockBridge(snapshot);
     render(<App />);
@@ -92,6 +92,8 @@ describe('phase 1 visual shell', () => {
   });
 
   it('handles bay focus shortcuts while terminal input is focused', async () => {
+    const snapshot = createMultiSessionState();
+    window.commandDeck = createMockBridge(snapshot);
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Claude Command Deck' })).toBeInTheDocument();
@@ -117,7 +119,7 @@ describe('phase 1 visual shell', () => {
   });
 
   it('cycles sessions without taking terminal keyboard shortcuts away', async () => {
-    const snapshot = createPhaseOneState('test');
+    const snapshot = createMultiSessionState();
     snapshot.settings.auth.startupChecksEnabled = false;
     const bridge = createMockBridge(snapshot);
     window.commandDeck = bridge;
@@ -135,7 +137,7 @@ describe('phase 1 visual shell', () => {
   });
 
   it('keeps shared-directory sessions running when bulk restart cannot ask for consent', async () => {
-    const snapshot = createPhaseOneState('test');
+    const snapshot = createMultiSessionState();
     snapshot.settings.auth.startupChecksEnabled = false;
     snapshot.sessions[0]!.configuration = {
       ...snapshot.sessions[0]!.configuration,
@@ -172,7 +174,7 @@ describe('phase 1 visual shell', () => {
   });
 
   it('opens the directory picker from explicit session controls', async () => {
-    const snapshot = createPhaseOneState('test');
+    const snapshot = createMultiSessionState();
     snapshot.settings.auth.startupChecksEnabled = false;
     const selectDirectory = vi.fn(() =>
       Promise.resolve({
@@ -195,7 +197,7 @@ describe('phase 1 visual shell', () => {
   });
 
   it('adds and focuses a new directory-backed session without a fixed bay limit', async () => {
-    const snapshot = createPhaseOneState('test');
+    const snapshot = createMultiSessionState();
     snapshot.settings.auth.startupChecksEnabled = false;
     const configuration = {
       ...createDefaultSessionConfiguration('session-dynamic-5', 5),
@@ -331,10 +333,17 @@ describe('phase 1 visual shell', () => {
     snapshot.settings.auth.startupChecksEnabled = false;
     snapshot.sessions[0]!.configuration.workingDirectory = '/Users/example/project';
     let stateListener: Parameters<CommandDeckBridge['terminal']['onState']>[0] | undefined;
+    let processCount = 0;
     const bridge = createMockBridge(
       snapshot,
       {},
       {
+        startClaude: vi.fn(() => {
+          processCount += 1;
+          return Promise.resolve(
+            successfulClaudeStart('deck-session-1-1', `process-claude-${processCount}`),
+          );
+        }),
         onState: vi.fn<CommandDeckBridge['terminal']['onState']>((listener) => {
           stateListener = listener;
           return () => undefined;
@@ -479,7 +488,7 @@ describe('phase 1 visual shell', () => {
   });
 
   it('starts the shell from the terminal command controls', async () => {
-    const snapshot = createPhaseOneState('test');
+    const snapshot = createMultiSessionState();
     snapshot.settings.auth.startupChecksEnabled = false;
     snapshot.sessions[1]!.configuration.workingDirectory = '/Users/example/project';
     const startShell = vi.fn(() => Promise.resolve({ ok: true as const }));
@@ -507,7 +516,7 @@ describe('phase 1 visual shell', () => {
   });
 
   it('persists an inline shell selection and uses it for the next shell launch', async () => {
-    const snapshot = createPhaseOneState('test');
+    const snapshot = createMultiSessionState();
     snapshot.settings.auth.startupChecksEnabled = false;
     snapshot.sessions[1]!.configuration.workingDirectory = '/Users/example/project';
     const updateShellConfiguration = vi.fn(() => Promise.resolve({ ok: true as const }));
@@ -572,11 +581,121 @@ describe('phase 1 visual shell', () => {
     await waitFor(() => expect(shellSelector).toHaveValue('auto'));
   });
 
+  it('commits text settings on blur and restores the saved value after an IPC failure', async () => {
+    const snapshot = createPhaseOneState('test');
+    const updateClaudeConfiguration = vi.fn(() =>
+      Promise.reject(new Error('Settings storage is unavailable.')),
+    );
+    const bridge = createMockBridge(snapshot);
+    bridge.updateClaudeConfiguration = updateClaudeConfiguration;
+    window.commandDeck = bridge;
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Settings' }));
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Claude Code' }));
+    const executable = within(dialog).getByRole('textbox', { name: 'Default executable' });
+
+    fireEvent.change(executable, { target: { value: '/missing/claude' } });
+    expect(updateClaudeConfiguration).not.toHaveBeenCalled();
+    fireEvent.blur(executable);
+
+    await waitFor(() =>
+      expect(updateClaudeConfiguration).toHaveBeenCalledWith({
+        executable: '/missing/claude',
+        baseArgs: [],
+      }),
+    );
+    await waitFor(() =>
+      expect(within(dialog).getByRole('textbox', { name: 'Default executable' })).toHaveValue(
+        'claude',
+      ),
+    );
+  });
+
+  it('ignores stale state and exit events after a newer process becomes active', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.sessions[0]!.configuration.workingDirectory = '/Users/example/project';
+    const stateListeners: Array<Parameters<CommandDeckBridge['terminal']['onState']>[0]> = [];
+    const exitListeners: Array<Parameters<CommandDeckBridge['terminal']['onExit']>[0]> = [];
+    window.commandDeck = createMockBridge(
+      snapshot,
+      {},
+      {
+        onState: vi.fn<CommandDeckBridge['terminal']['onState']>((listener) => {
+          stateListeners.push(listener);
+          return () => undefined;
+        }),
+        onExit: vi.fn<CommandDeckBridge['terminal']['onExit']>((listener) => {
+          exitListeners.push(listener);
+          return () => undefined;
+        }),
+      },
+    );
+
+    render(<App />);
+    const article = await screen.findByRole('article', {
+      name: /Session 1 session bay/i,
+    });
+    act(() => {
+      stateListeners.forEach((listener) =>
+        listener({
+          sessionId: 'session-1',
+          snapshot: {
+            id: 'process-current',
+            type: 'shellSession',
+            sessionId: 'session-1',
+            workingDirectory: '/Users/example/project',
+            executable: 'zsh',
+            args: [],
+            startedAt: new Date().toISOString(),
+            state: 'running',
+            restartGeneration: 0,
+          },
+        }),
+      );
+    });
+    expect(await within(article).findByText('zsh is attached to this bay.')).toBeInTheDocument();
+
+    act(() => {
+      stateListeners.forEach((listener) =>
+        listener({
+          sessionId: 'session-1',
+          snapshot: {
+            id: 'process-stale',
+            type: 'claudeSession',
+            sessionId: 'session-1',
+            workingDirectory: '/Users/example/project',
+            executable: 'claude',
+            args: [],
+            startedAt: new Date().toISOString(),
+            state: 'running',
+            restartGeneration: 0,
+          },
+        }),
+      );
+      exitListeners.forEach((listener) =>
+        listener({
+          sessionId: 'session-1',
+          processId: 'process-stale',
+          exitCode: 0,
+          signal: null,
+          crashed: false,
+        }),
+      );
+    });
+
+    expect(within(article).getByText('zsh is attached to this bay.')).toBeInTheDocument();
+  });
+
   it('verifies connected auth and starts refresh from one action when the check fails', async () => {
     const snapshot = createPhaseOneState('test');
     const lastCheckedAt = new Date().toISOString();
     snapshot.settings.auth = {
       ...snapshot.settings.auth,
+      provider: 'aws',
+      checkExecutable: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
       startupChecksEnabled: false,
       refreshExecutable: 'aws',
       refreshArgs: ['sso', 'login'],
@@ -717,10 +836,27 @@ function createMockBridge(
   };
 }
 
-function successfulClaudeStart(newConversationBinding: string | null) {
+function createMultiSessionState(): AppStateSnapshot {
+  const snapshot = createPhaseOneState('test');
+  const runtimeTemplate = snapshot.sessions[0]!.runtime;
+  for (let index = 2; index <= 4; index += 1) {
+    const configuration = createDefaultSessionConfiguration(`session-${index}`, index);
+    snapshot.settings.sessions.push(configuration);
+    snapshot.sessions.push({
+      configuration,
+      runtime: { ...runtimeTemplate },
+    });
+  }
+  return snapshot;
+}
+
+function successfulClaudeStart(
+  newConversationBinding: string | null,
+  processId = 'process-claude-1',
+) {
   return {
     ok: true as const,
-    processId: 'process-claude-1',
+    processId,
     strategy: 'new' as const,
     newConversationBinding,
     warnings: [],

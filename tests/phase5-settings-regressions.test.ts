@@ -1,6 +1,10 @@
 import type { SafeLogger } from '../src/main/logging/SafeLogger';
 import { SettingsStore } from '../src/main/persistence/SettingsStore';
-import { createDefaultSettings, normalizeApplicationSettings } from '../src/shared/domain/defaults';
+import {
+  createDefaultSessionConfiguration,
+  createDefaultSettings,
+  normalizeApplicationSettings,
+} from '../src/shared/domain/defaults';
 import { applicationSettingsSchema } from '../src/shared/schemas/settings';
 
 const storeState = vi.hoisted<{ settings: unknown }>(() => ({
@@ -114,6 +118,7 @@ describe('phase 5 settings migration regressions', () => {
 
 function createVersionOneSettings() {
   const current = createDefaultSettings();
+  current.sessions.push(createDefaultSessionConfiguration('session-2', 2));
   const legacy = { ...current, shellExecutable: 'pwsh.exe' };
   Reflect.deleteProperty(legacy, 'shellKind');
   return {

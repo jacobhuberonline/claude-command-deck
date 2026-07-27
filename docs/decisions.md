@@ -98,4 +98,12 @@
 - Added stable Claude conversation names. Fresh sessions use `--name` when discovered, and later continuation uses exact `--resume <name>` instead of ambiguous directory-most-recent behavior.
 - Kept recent terminal output in a bounded UTF-8-aware chunk replay so switching profiles restores context without persisting transcripts; clearing a terminal clears its replay too.
 - Replaced the unused shell-executable display with a typed, persisted selector. Shell availability and executable resolution remain in the main process; explicit selections never silently fall back.
-- Pinned jsdom to 26.1.0 so the Vitest DOM environment remains usable on the repository's declared Node 20 baseline.
+- Pinned jsdom to 26.1.0 so the Vitest DOM environment remains stable on the repository's supported Node baseline.
+
+## Reliability And Release Hardening
+
+- Text settings now commit on blur or Enter instead of writing on every keystroke. Renderer updates catch IPC failures and restore the last acknowledged value without overwriting a newer edit.
+- Renderer process state retains the main-process UUID so late output, binding, and exit events from a replaced PTY are ignored.
+- New installations start with one session and credential monitoring disabled. Choosing the AWS provider fills the safe identity-check preset when no custom check is present.
+- Added Node-version pinning, coverage floors, cross-platform CI, a Windows unpacked-package check, and an NSIS installer target.
+- Pinned app-builder-lib's hashing dependency to its CommonJS-compatible 1.8 release because the current CommonJS packager loads that module with `require`; remove the override after the packager adopts the dependency's ESM-only API.

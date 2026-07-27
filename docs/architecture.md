@@ -33,6 +33,8 @@ Owns React UI, xterm.js terminal instances, focus awareness, activity presentati
 
 IPC contracts are defined in shared TypeScript types and Zod schemas. Main-process handlers validate every request and return typed responses. Terminal output is event-based and batched in the main process to avoid flooding the renderer during high-volume output.
 
+Renderer runtime state tracks the main-owned process UUID and ignores lifecycle events from a process that has already been replaced. Settings text fields stage local drafts and commit at an explicit blur or Enter boundary; failed persistence requests restore the last acknowledged value.
+
 ## PTY Lifecycle
 
 Each managed PTY has an internal UUID, process type, opaque session ID, working directory, executable, arguments, PID, lifecycle timestamps, exit metadata, and restart generation. Terminal display lifecycle is separate from PTY lifecycle so switching the selected profile does not create duplicate processes. The renderer keeps a bounded, non-persistent output replay per session so the primary xterm can reconstruct recent scrollback after a switch.
@@ -65,6 +67,8 @@ Renderer-side audio listens for semantic events and decides whether to play loca
 ## Persistence Boundaries
 
 Electron Store persists non-secret metadata only: opaque session IDs, display names, Claude conversation names, model overrides, directories, preferred shell, Claude executable and arguments, launch preferences, selected session, navigator layout, authentication command configuration, audio preferences, quiet hours, and diagnostics preferences. It does not persist terminal transcripts, terminal input, raw authentication output, environment dumps, access keys, session tokens, device codes, cookies, or bearer tokens.
+
+New installations start with one empty session and credential monitoring disabled. Existing validated settings are migrated without replacing the user’s session list or provider choice.
 
 ## Logging And Redaction
 

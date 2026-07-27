@@ -99,6 +99,7 @@ export interface SessionConfiguration {
 
 export interface SessionRuntimeState {
   processState: ProcessState;
+  processId?: string | undefined;
   processType?: ManagedProcessType | undefined;
   activityState: ActivityState;
   activityConfidence: ActivityConfidence;

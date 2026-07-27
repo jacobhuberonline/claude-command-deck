@@ -25,14 +25,20 @@ describe('phase 5 settings validation', () => {
     ).toBe(false);
   });
 
-  it('uses four ordinary project profiles without forcing a model or executable override', () => {
+  it('starts with one ordinary project profile and an opt-in credential monitor', () => {
     const settings = createDefaultSettings();
 
-    expect(settings.sessions).toHaveLength(4);
+    expect(settings.sessions).toHaveLength(1);
     expect(settings.sessions.every((session) => session.role === 'project')).toBe(true);
     expect(settings.sessions.every((session) => session.model === '')).toBe(true);
     expect(settings.sessions.every((session) => session.executable === '')).toBe(true);
     expect(settings.sessions.every((session) => session.restoreOnLaunch === false)).toBe(true);
+    expect(settings.auth).toMatchObject({
+      provider: 'disabled',
+      checkExecutable: '',
+      checkArgs: [],
+      startupChecksEnabled: false,
+    });
   });
 
   it('accepts dynamic opaque session IDs beyond the original four bays', () => {
