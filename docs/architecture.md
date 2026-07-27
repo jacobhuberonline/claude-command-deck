@@ -33,7 +33,7 @@ Owns React UI, xterm.js terminal instances, focus awareness, activity presentati
 
 IPC contracts are defined in shared TypeScript types and Zod schemas. Main-process handlers validate every request and return typed responses. Terminal output is event-based and batched in the main process to avoid flooding the renderer during high-volume output.
 
-Renderer runtime state tracks the main-owned process UUID and ignores lifecycle events from a process that has already been replaced. Settings text fields stage local drafts and commit at an explicit blur or Enter boundary; failed persistence requests restore the last acknowledged value.
+Renderer runtime state tracks the main-owned process UUID and ignores lifecycle events from a process that has already been replaced. Settings text fields stage local drafts and commit at an explicit blur or Enter boundary; failed persistence requests restore the last acknowledged value. Navigator reordering sends only the complete ordered list of opaque session IDs; the main process validates that it exactly matches the saved session set before persisting it.
 
 ## PTY Lifecycle
 

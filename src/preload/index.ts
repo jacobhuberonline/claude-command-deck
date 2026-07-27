@@ -78,6 +78,11 @@ const bridge: CommandDeckBridge = {
       Awaited<ReturnType<CommandDeckBridge['updateSessionConfiguration']>>
     >;
   },
+  updateSessionOrder: (request) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.appUpdateSessionOrder, request) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['updateSessionOrder']>>
+    >;
+  },
   updateSessionAudioPreferences: (request) => {
     return ipcRenderer.invoke(IPC_CHANNELS.appUpdateSessionAudioPreferences, request) as Promise<
       Awaited<ReturnType<CommandDeckBridge['updateSessionAudioPreferences']>>

@@ -71,6 +71,7 @@ const fallbackBridge = {
   updateDeckPreferences: () => Promise.resolve({ ok: true as const }),
   updateNotificationPreferences: () => Promise.resolve({ ok: true as const }),
   updateSessionConfiguration: () => Promise.resolve({ ok: true as const }),
+  updateSessionOrder: () => Promise.resolve({ ok: true as const }),
   updateSessionAudioPreferences: () => Promise.resolve({ ok: true as const }),
   claude: {
     discover: (executable: string) =>
@@ -245,6 +246,7 @@ export function App() {
     updateNotificationPreferences,
     updateSessionAudioPreferences,
     updateSessionConfiguration,
+    updateSessionOrder,
   } = useSettingsPersistence({
     bridge,
     stateRef: appStateRef,
@@ -1845,6 +1847,9 @@ export function App() {
           }}
           onUpdateSessionConfiguration={(configuration) => {
             void updateSessionConfiguration(configuration);
+          }}
+          onReorderSessions={(sessionIds) => {
+            void updateSessionOrder(sessionIds);
           }}
           terminalBridge={bridge.terminal}
           terminalFocusRequest={terminalFocusRequest}

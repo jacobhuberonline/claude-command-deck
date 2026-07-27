@@ -13,6 +13,7 @@ export const IPC_CHANNELS = {
   appUpdateAudioPreferences: 'app:update-audio-preferences',
   appUpdateNotificationPreferences: 'app:update-notification-preferences',
   appUpdateSessionConfiguration: 'app:update-session-configuration',
+  appUpdateSessionOrder: 'app:update-session-order',
   appUpdateSessionAudioPreferences: 'app:update-session-audio-preferences',
   claudeDiscover: 'claude:discover',
   authCheck: 'auth:check',

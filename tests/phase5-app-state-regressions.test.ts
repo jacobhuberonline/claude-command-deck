@@ -33,11 +33,13 @@ vi.mock('electron', () => ({
 describe('phase 5 app-state mutation regressions', () => {
   const settings = createDefaultSettings();
   const updateSessionConfiguration = vi.fn();
+  const updateSessionOrder = vi.fn(() => true);
   const updateSessionAudioPreferences = vi.fn();
   const updateShellConfiguration = vi.fn();
   const settingsStore = {
     load: vi.fn(() => settings),
     updateSessionConfiguration,
+    updateSessionOrder,
     updateSessionAudioPreferences,
     updateShellConfiguration,
   } as unknown as SettingsStore;
@@ -80,6 +82,33 @@ describe('phase 5 app-state mutation regressions', () => {
       error: 'The selected session no longer exists.',
     });
     expect(updateSessionAudioPreferences).not.toHaveBeenCalled();
+  });
+
+  it('persists a complete validated session order', async () => {
+    const handler = getHandler(IPC_CHANNELS.appUpdateSessionOrder);
+    const result = await handler(undefined, {
+      sessionIds: settings.sessions.map((session) => session.id),
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(updateSessionOrder).toHaveBeenCalledWith(settings.sessions.map((session) => session.id));
+  });
+
+  it('rejects a session order with duplicates or unknown IDs', async () => {
+    const handler = getHandler(IPC_CHANNELS.appUpdateSessionOrder);
+    const duplicateResult = await handler(undefined, {
+      sessionIds: [settings.sessions[0]!.id, settings.sessions[0]!.id],
+    });
+    const unknownResult = await handler(undefined, {
+      sessionIds: ['session-unknown'],
+    });
+
+    expect(duplicateResult).toEqual({ ok: false, error: 'Invalid session order.' });
+    expect(unknownResult).toEqual({
+      ok: false,
+      error: 'The session list changed before its order could be saved.',
+    });
+    expect(updateSessionOrder).not.toHaveBeenCalled();
   });
 
   it('persists a validated shell preference', async () => {

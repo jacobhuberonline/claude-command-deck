@@ -62,6 +62,10 @@ export interface UpdateSessionConfigurationRequest {
   configuration: SessionConfiguration;
 }
 
+export interface UpdateSessionOrderRequest {
+  sessionIds: SessionId[];
+}
+
 export interface UpdateSessionAudioPreferencesRequest {
   sessionId: SessionId;
   preferences: SessionAudioPreferences;
@@ -256,6 +260,7 @@ export interface CommandDeckBridge {
   updateSessionConfiguration: (
     request: UpdateSessionConfigurationRequest,
   ) => Promise<CommandResult>;
+  updateSessionOrder: (request: UpdateSessionOrderRequest) => Promise<CommandResult>;
   updateSessionAudioPreferences: (
     request: UpdateSessionAudioPreferencesRequest,
   ) => Promise<CommandResult>;

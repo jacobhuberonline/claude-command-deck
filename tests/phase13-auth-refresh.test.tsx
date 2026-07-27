@@ -326,6 +326,7 @@ function createMockBridge(
     updateDeckPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateNotificationPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateSessionConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
+    updateSessionOrder: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateSessionAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     claude: {
       discover: vi.fn(() =>

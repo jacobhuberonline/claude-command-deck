@@ -5,6 +5,7 @@ Local Electron desktop app for supervising many Claude Code sessions across diff
 ## Session Workflow
 
 - Add a directory with the **Session** button or `Alt+N`.
+- Drag navigator handles to arrange sessions, or focus a handle and use `Arrow Up`/`Arrow Down`; the order is saved.
 - Jump to the first nine saved sessions with `Alt+1` through `Alt+9`.
 - Cycle sessions with `Ctrl+PageUp` and `Ctrl+PageDown`.
 - Focus session search with `Ctrl+Shift+P`.

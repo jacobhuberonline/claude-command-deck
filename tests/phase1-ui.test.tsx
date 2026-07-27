@@ -136,6 +136,88 @@ describe('phase 1 visual shell', () => {
     expect(within(status).getByText('Session 1')).toBeInTheDocument();
   });
 
+  it('reorders navigator sessions by drag and keyboard and persists each order', async () => {
+    const snapshot = createMultiSessionState();
+    snapshot.settings.auth.startupChecksEnabled = false;
+    const updateSessionOrder = vi.fn(() => Promise.resolve({ ok: true as const }));
+    const bridge = createMockBridge(snapshot);
+    bridge.updateSessionOrder = updateSessionOrder;
+    window.commandDeck = bridge;
+
+    render(<App />);
+
+    const sourceHandle = await screen.findByRole('button', { name: /^Move Session 3/ });
+    const targetButton = screen.getByRole('button', { name: /^1 Session 1/i });
+    const targetRow = targetButton.closest<HTMLElement>('.session-list-row');
+    expect(targetRow).not.toBeNull();
+    vi.spyOn(targetRow!, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      bottom: 20,
+      height: 20,
+      left: 0,
+      right: 280,
+      width: 280,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    const dataTransfer = createDataTransfer('session-3');
+
+    fireEvent.dragStart(sourceHandle, { dataTransfer });
+    fireEvent.dragOver(targetRow!, { clientY: 1, dataTransfer });
+    fireEvent.drop(targetRow!, { clientY: 1, dataTransfer });
+
+    await waitFor(() =>
+      expect(updateSessionOrder).toHaveBeenNthCalledWith(1, {
+        sessionIds: ['session-1', 'session-3', 'session-2', 'session-4'],
+      }),
+    );
+    expect(screen.getByRole('button', { name: /^2 Session 3/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /^Move Session 1/ }), {
+      key: 'ArrowDown',
+    });
+
+    await waitFor(() =>
+      expect(updateSessionOrder).toHaveBeenNthCalledWith(2, {
+        sessionIds: ['session-3', 'session-1', 'session-2', 'session-4'],
+      }),
+    );
+    expect(screen.getByRole('button', { name: /^1 Session 3/i })).toBeInTheDocument();
+    expect(screen.getByText('Session 1 moved to position 2 of 4.')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { altKey: true, key: 'Unidentified', code: 'Digit1' });
+    expect(
+      within(screen.getByRole('contentinfo', { name: 'Application status' })).getByText(
+        'Session 3',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('restores the saved navigator order when persistence fails', async () => {
+    const snapshot = createMultiSessionState();
+    snapshot.settings.auth.startupChecksEnabled = false;
+    const bridge = createMockBridge(snapshot);
+    const updateSessionOrder = vi.fn(() => Promise.reject(new Error('Storage unavailable.')));
+    bridge.updateSessionOrder = updateSessionOrder;
+    window.commandDeck = bridge;
+
+    render(<App />);
+    fireEvent.keyDown(await screen.findByRole('button', { name: /^Move Session 2/ }), {
+      key: 'ArrowUp',
+    });
+
+    await waitFor(() =>
+      expect(updateSessionOrder).toHaveBeenCalledWith({
+        sessionIds: ['session-2', 'session-1', 'session-3', 'session-4'],
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^1 Session 1/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /^2 Session 2/i })).toBeInTheDocument();
+  });
+
   it('keeps shared-directory sessions running when bulk restart cannot ask for consent', async () => {
     const snapshot = createMultiSessionState();
     snapshot.settings.auth.startupChecksEnabled = false;
@@ -774,6 +856,7 @@ function createMockBridge(
     updateDeckPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateNotificationPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateSessionConfiguration: vi.fn(() => Promise.resolve({ ok: true as const })),
+    updateSessionOrder: vi.fn(() => Promise.resolve({ ok: true as const })),
     updateSessionAudioPreferences: vi.fn(() => Promise.resolve({ ok: true as const })),
     claude: {
       discover: vi.fn(() =>
@@ -878,4 +961,16 @@ function successfulClaudePreparation(launchMode: 'new' | 'continueMostRecent' | 
     hasActiveProcess: false,
     warnings: [],
   };
+}
+
+function createDataTransfer(sessionId: string): DataTransfer {
+  let storedSessionId = sessionId;
+  return {
+    effectAllowed: 'none',
+    dropEffect: 'none',
+    setData: vi.fn((_format: string, value: string) => {
+      storedSessionId = value;
+    }),
+    getData: vi.fn(() => storedSessionId),
+  } as unknown as DataTransfer;
 }

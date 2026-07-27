@@ -364,6 +364,85 @@ export function useSettingsPersistence({
     [addDiagnostic, bridge, markSameProjects, normalizeSessionConfiguration, setState, stateRef],
   );
 
+  const updateSessionOrder = useCallback(
+    async (sessionIds: SessionId[]) => {
+      const previousSessionIds = stateRef.current.settings.sessions.map((session) => session.id);
+      if (!hasSameSessionIds(previousSessionIds, sessionIds)) {
+        addDiagnostic(
+          'session-order',
+          'Session order',
+          'The session list changed before its order could be updated.',
+        );
+        return;
+      }
+
+      setState((current) => {
+        const settingsSessions = orderBySessionIds(
+          current.settings.sessions,
+          (session) => session.id,
+          sessionIds,
+        );
+        const sessions = orderBySessionIds(
+          current.sessions,
+          (session) => session.configuration.id,
+          sessionIds,
+        );
+        if (!settingsSessions || !sessions) {
+          return current;
+        }
+
+        return {
+          ...current,
+          settings: {
+            ...current.settings,
+            sessions: settingsSessions,
+          },
+          sessions,
+        };
+      });
+
+      const result = await invokeCommand(
+        () => bridge.updateSessionOrder({ sessionIds }),
+        'Unable to save the session order.',
+      );
+      if (!result.ok) {
+        setState((current) => {
+          if (
+            !hasSessionOrder(current.settings.sessions, (session) => session.id, sessionIds) ||
+            !hasSessionOrder(current.sessions, (session) => session.configuration.id, sessionIds)
+          ) {
+            return current;
+          }
+
+          const settingsSessions = orderBySessionIds(
+            current.settings.sessions,
+            (session) => session.id,
+            previousSessionIds,
+          );
+          const sessions = orderBySessionIds(
+            current.sessions,
+            (session) => session.configuration.id,
+            previousSessionIds,
+          );
+          if (!settingsSessions || !sessions) {
+            return current;
+          }
+
+          return {
+            ...current,
+            settings: {
+              ...current.settings,
+              sessions: settingsSessions,
+            },
+            sessions,
+          };
+        });
+        addDiagnostic('session-order', 'Session order', result.error);
+      }
+    },
+    [addDiagnostic, bridge, setState, stateRef],
+  );
+
   return {
     updateAudioPreferences,
     updateAuthConfiguration,
@@ -372,5 +451,50 @@ export function useSettingsPersistence({
     updateNotificationPreferences,
     updateSessionAudioPreferences,
     updateSessionConfiguration,
+    updateSessionOrder,
   };
+}
+
+function hasSameSessionIds(currentSessionIds: SessionId[], requestedSessionIds: SessionId[]) {
+  return (
+    currentSessionIds.length === requestedSessionIds.length &&
+    new Set(currentSessionIds).size === currentSessionIds.length &&
+    new Set(requestedSessionIds).size === requestedSessionIds.length &&
+    requestedSessionIds.every((sessionId) => currentSessionIds.includes(sessionId))
+  );
+}
+
+function hasSessionOrder<T>(
+  items: T[],
+  getSessionId: (item: T) => SessionId,
+  sessionIds: SessionId[],
+) {
+  return (
+    items.length === sessionIds.length &&
+    items.every((item, index) => getSessionId(item) === sessionIds[index])
+  );
+}
+
+function orderBySessionIds<T>(
+  items: T[],
+  getSessionId: (item: T) => SessionId,
+  sessionIds: SessionId[],
+): T[] | null {
+  if (items.length !== sessionIds.length || new Set(sessionIds).size !== sessionIds.length) {
+    return null;
+  }
+
+  const itemsById = new Map(items.map((item) => [getSessionId(item), item]));
+  if (itemsById.size !== items.length) {
+    return null;
+  }
+  const ordered: T[] = [];
+  for (const sessionId of sessionIds) {
+    const item = itemsById.get(sessionId);
+    if (!item) {
+      return null;
+    }
+    ordered.push(item);
+  }
+  return ordered;
 }

@@ -98,6 +98,7 @@
 - Added stable Claude conversation names. Fresh sessions use `--name` when discovered, and later continuation uses exact `--resume <name>` instead of ambiguous directory-most-recent behavior.
 - Kept recent terminal output in a bounded UTF-8-aware chunk replay so switching profiles restores context without persisting transcripts; clearing a terminal clears its replay too.
 - Replaced the unused shell-executable display with a typed, persisted selector. Shell availability and executable resolution remain in the main process; explicit selections never silently fall back.
+- Added persisted navigator ordering with pointer drag handles and keyboard Arrow-key movement. Reordering preserves session identity and runtime state rather than recreating sessions.
 - Pinned jsdom to 26.1.0 so the Vitest DOM environment remains stable on the repository's supported Node baseline.
 
 ## Reliability And Release Hardening

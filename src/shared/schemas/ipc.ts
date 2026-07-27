@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_SESSION_COUNT } from '../domain/types';
 import {
   authConfigurationSchema,
   audioPreferencesSchema,
@@ -51,6 +52,16 @@ export const updateNotificationPreferencesRequestSchema = z.object({
 
 export const updateSessionConfigurationRequestSchema = z.object({
   configuration: sessionConfigurationSchema,
+});
+
+export const updateSessionOrderRequestSchema = z.object({
+  sessionIds: z
+    .array(sessionIdSchema)
+    .min(1)
+    .max(MAX_SESSION_COUNT)
+    .refine((sessionIds) => new Set(sessionIds).size === sessionIds.length, {
+      message: 'Session IDs must be unique.',
+    }),
 });
 
 export const updateSessionAudioPreferencesRequestSchema = z.object({

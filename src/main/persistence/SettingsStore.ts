@@ -92,6 +92,32 @@ export class SettingsStore {
     return true;
   }
 
+  updateSessionOrder(sessionIds: SessionId[]): boolean {
+    const current = this.load();
+    if (
+      sessionIds.length !== current.sessions.length ||
+      new Set(sessionIds).size !== sessionIds.length
+    ) {
+      return false;
+    }
+
+    const sessionsById = new Map(current.sessions.map((session) => [session.id, session]));
+    const sessions: SessionConfiguration[] = [];
+    for (const sessionId of sessionIds) {
+      const session = sessionsById.get(sessionId);
+      if (!session) {
+        return false;
+      }
+      sessions.push(session);
+    }
+
+    this.save({
+      ...current,
+      sessions,
+    });
+    return true;
+  }
+
   addSession(directory: string): SessionConfiguration | null {
     const current = this.load();
     if (current.sessions.length >= MAX_SESSION_COUNT) {

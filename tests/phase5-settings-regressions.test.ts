@@ -114,6 +114,30 @@ describe('phase 5 settings migration regressions', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('persists a complete session reorder and rejects partial orders', () => {
+    const settings = createDefaultSettings();
+    settings.sessions.push(
+      createDefaultSessionConfiguration('session-2', 2),
+      createDefaultSessionConfiguration('session-3', 3),
+    );
+    storeState.settings = settings;
+    const store = new SettingsStore(logger);
+
+    expect(store.updateSessionOrder(['session-3', 'session-1', 'session-2'])).toBe(true);
+    expect(store.load().sessions.map((session) => session.id)).toEqual([
+      'session-3',
+      'session-1',
+      'session-2',
+    ]);
+    expect(store.updateSessionOrder(['session-3', 'session-1'])).toBe(false);
+    expect(store.updateSessionOrder(['session-3', 'session-1', 'session-unknown'])).toBe(false);
+    expect(store.load().sessions.map((session) => session.id)).toEqual([
+      'session-3',
+      'session-1',
+      'session-2',
+    ]);
+  });
 });
 
 function createVersionOneSettings() {

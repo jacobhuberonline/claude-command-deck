@@ -1,5 +1,5 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { useMemo, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { GripVertical, Plus, Search, Trash2 } from 'lucide-react';
 import type {
   SessionConfiguration,
   SessionId,
@@ -13,6 +13,7 @@ import type { TerminalReplayStore } from '../../services/terminal/TerminalReplay
 import { SessionBay } from './SessionBay';
 
 type SessionFilter = 'all' | 'running' | 'attention';
+type DropPosition = 'before' | 'after';
 
 interface SessionGridProps {
   sessions: SessionSnapshot[];
@@ -33,6 +34,7 @@ interface SessionGridProps {
   onOpenDirectory: (sessionId: SessionId) => void;
   onStopSession: (sessionId: SessionId) => void;
   onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
+  onReorderSessions: (sessionIds: SessionId[]) => void;
   terminalBridge: TerminalBridge;
   terminalFocusRequest: number;
   terminalReplayStore: TerminalReplayStore;
@@ -57,6 +59,7 @@ export function SessionGrid({
   onOpenDirectory,
   onStopSession,
   onUpdateSessionConfiguration,
+  onReorderSessions,
   terminalBridge,
   terminalFocusRequest,
   terminalReplayStore,
@@ -64,6 +67,12 @@ export function SessionGrid({
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<SessionFilter>('all');
   const [highlightedSessionId, setHighlightedSessionId] = useState<SessionId | null>(null);
+  const [draggingSessionId, setDraggingSessionId] = useState<SessionId | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    sessionId: SessionId;
+    position: DropPosition;
+  } | null>(null);
+  const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const focused = sessions.find((session) => session.configuration.id === focusedSessionId);
   const normalizedQuery = query.trim().toLowerCase();
   const filteredSessions = useMemo(
@@ -129,6 +138,54 @@ export function SessionGrid({
     if (nextSession) {
       setHighlightedSessionId(nextSession.configuration.id);
     }
+  };
+
+  const commitSessionOrder = (sessionIds: SessionId[], movedSessionId: SessionId) => {
+    const currentSessionIds = sessions.map((session) => session.configuration.id);
+    if (
+      sessionIds.length !== currentSessionIds.length ||
+      sessionIds.every((sessionId, index) => sessionId === currentSessionIds[index])
+    ) {
+      return;
+    }
+
+    onReorderSessions(sessionIds);
+    const movedSession = sessions.find((session) => session.configuration.id === movedSessionId);
+    setReorderAnnouncement(
+      `${movedSession?.configuration.name ?? 'Session'} moved to position ${
+        sessionIds.indexOf(movedSessionId) + 1
+      } of ${sessionIds.length}.`,
+    );
+  };
+
+  const moveSessionWithKeyboard = (sessionId: SessionId, direction: -1 | 1) => {
+    const sessionIds = sessions.map((session) => session.configuration.id);
+    const currentIndex = sessionIds.indexOf(sessionId);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= sessionIds.length) {
+      return;
+    }
+
+    sessionIds.splice(currentIndex, 1);
+    sessionIds.splice(nextIndex, 0, sessionId);
+    commitSessionOrder(sessionIds, sessionId);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>, targetSessionId: SessionId) => {
+    event.preventDefault();
+    const sourceSessionId = draggingSessionId || event.dataTransfer.getData('text/plain');
+    const position = getDropPosition(event);
+    const sessionIds = moveSessionId(
+      sessions.map((session) => session.configuration.id),
+      sourceSessionId,
+      targetSessionId,
+      position,
+    );
+    if (sessionIds) {
+      commitSessionOrder(sessionIds, sourceSessionId);
+    }
+    setDraggingSessionId(null);
+    setDropTarget(null);
   };
 
   return (
@@ -213,10 +270,51 @@ export function SessionGrid({
                     'session-list-row',
                     selected ? 'selected' : '',
                     highlighted ? 'highlighted' : '',
+                    draggingSessionId === configuration.id ? 'dragging' : '',
+                    dropTarget?.sessionId === configuration.id ? `drop-${dropTarget.position}` : '',
                   ].join(' ')}
                   role="listitem"
                   key={configuration.id}
+                  onDragOver={(event) => {
+                    if (!draggingSessionId || draggingSessionId === configuration.id) {
+                      return;
+                    }
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    setDropTarget({
+                      sessionId: configuration.id,
+                      position: getDropPosition(event),
+                    });
+                  }}
+                  onDrop={(event) => handleDrop(event, configuration.id)}
                 >
+                  <button
+                    className="session-drag-handle"
+                    type="button"
+                    draggable={sessions.length > 1}
+                    disabled={sessions.length <= 1}
+                    aria-label={`Move ${configuration.name}, position ${shortcutIndex + 1} of ${sessions.length}`}
+                    aria-keyshortcuts="ArrowUp ArrowDown"
+                    title="Drag to reorder. Use Arrow Up or Arrow Down for keyboard reordering."
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', configuration.id);
+                      setDraggingSessionId(configuration.id);
+                      setDropTarget(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggingSessionId(null);
+                      setDropTarget(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        moveSessionWithKeyboard(configuration.id, event.key === 'ArrowUp' ? -1 : 1);
+                      }
+                    }}
+                  >
+                    <GripVertical size={14} aria-hidden="true" />
+                  </button>
                   <button
                     className="session-list-main"
                     id={`session-result-${configuration.id}`}
@@ -268,8 +366,12 @@ export function SessionGrid({
             ) : null}
           </div>
 
+          <p className="sr-only" aria-live="polite">
+            {reorderAnnouncement}
+          </p>
+
           <footer className="navigator-footer">
-            <span>Alt+1…9 jump</span>
+            <span>Drag handles · Alt+1…9</span>
             <span>Ctrl+PgUp/PgDn cycle</span>
           </footer>
         </aside>
@@ -322,4 +424,30 @@ function countAttention(sessions: SessionSnapshot[]) {
 
 function humanizeState(value: string) {
   return value.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+function getDropPosition(event: DragEvent<HTMLDivElement>): DropPosition {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  return event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+}
+
+function moveSessionId(
+  sessionIds: SessionId[],
+  sourceSessionId: SessionId,
+  targetSessionId: SessionId,
+  position: DropPosition,
+): SessionId[] | null {
+  if (
+    !sourceSessionId ||
+    sourceSessionId === targetSessionId ||
+    !sessionIds.includes(sourceSessionId) ||
+    !sessionIds.includes(targetSessionId)
+  ) {
+    return null;
+  }
+
+  const nextSessionIds = sessionIds.filter((sessionId) => sessionId !== sourceSessionId);
+  const targetIndex = nextSessionIds.indexOf(targetSessionId);
+  nextSessionIds.splice(position === 'after' ? targetIndex + 1 : targetIndex, 0, sourceSessionId);
+  return nextSessionIds;
 }

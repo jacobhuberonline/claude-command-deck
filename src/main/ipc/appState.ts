@@ -20,6 +20,7 @@ import {
   updateShellConfigurationRequestSchema,
   updateSessionConfigurationRequestSchema,
   updateSessionAudioPreferencesRequestSchema,
+  updateSessionOrderRequestSchema,
 } from '../../shared/schemas/ipc';
 import type { SettingsStore } from '../persistence/SettingsStore';
 import type { SafeLogger } from '../logging/SafeLogger';
@@ -237,6 +238,25 @@ export function registerAppStateHandlers(
         : { ok: false, error: 'The selected session no longer exists.' };
     },
   );
+
+  ipcMain.handle(IPC_CHANNELS.appUpdateSessionOrder, (_event, rawPayload): CommandResult => {
+    const payload = updateSessionOrderRequestSchema.safeParse(rawPayload);
+    if (!payload.success) {
+      return { ok: false, error: 'Invalid session order.' };
+    }
+
+    const currentSessionIds = settingsStore.load().sessions.map((session) => session.id);
+    if (
+      payload.data.sessionIds.length !== currentSessionIds.length ||
+      payload.data.sessionIds.some((sessionId) => !currentSessionIds.includes(sessionId))
+    ) {
+      return { ok: false, error: 'The session list changed before its order could be saved.' };
+    }
+
+    return settingsStore.updateSessionOrder(payload.data.sessionIds)
+      ? { ok: true }
+      : { ok: false, error: 'The session order could not be saved.' };
+  });
 
   ipcMain.handle(
     IPC_CHANNELS.appUpdateSessionAudioPreferences,
