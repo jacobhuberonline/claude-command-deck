@@ -1,4 +1,5 @@
 import {
+  applyAwsPreset,
   createDefaultSessionConfiguration,
   createDefaultSettings,
   normalizeApplicationSettings,
@@ -48,9 +49,93 @@ describe('phase 5 settings validation', () => {
     expect(settings.sessions.every((session) => session.restoreOnLaunch === false)).toBe(true);
     expect(settings.auth).toMatchObject({
       provider: 'disabled',
+      awsProfile: '',
       checkExecutable: '',
       checkArgs: [],
       startupChecksEnabled: false,
+    });
+  });
+
+  it('hardcodes AWS commands while preserving profile, interval, and startup preferences', () => {
+    const defaults = createDefaultSettings().auth;
+    const configured = applyAwsPreset({
+      ...defaults,
+      provider: 'aws',
+      awsProfile: '  production-admin  ',
+      checkExecutable: '/custom/aws',
+      checkArgs: ['custom-check'],
+      refreshExecutable: '/custom/login',
+      refreshArgs: ['custom-login'],
+      workingDirectory: '/custom/directory',
+      shellMode: true,
+      checkIntervalSeconds: 900,
+      checkTimeoutSeconds: 60,
+      expirationWarningMinutes: 90,
+      startupChecksEnabled: false,
+    });
+
+    expect(configured).toMatchObject({
+      provider: 'aws',
+      awsProfile: 'production-admin',
+      checkExecutable: 'aws',
+      checkArgs: [
+        'sts',
+        'get-caller-identity',
+        '--output',
+        'json',
+        '--profile',
+        'production-admin',
+      ],
+      refreshExecutable: 'aws',
+      refreshArgs: ['sso', 'login', '--profile', 'production-admin'],
+      workingDirectory: '',
+      shellMode: false,
+      checkIntervalSeconds: 900,
+      checkTimeoutSeconds: 15,
+      expirationWarningMinutes: 15,
+      startupChecksEnabled: false,
+    });
+    expect(applyAwsPreset({ ...configured, awsProfile: ' ' }).checkArgs).toEqual([
+      'sts',
+      'get-caller-identity',
+      '--output',
+      'json',
+    ]);
+  });
+
+  it('recovers a legacy AWS profile from refresh arguments when check arguments omit it', () => {
+    const settings = createDefaultSettings();
+    settings.auth = {
+      ...settings.auth,
+      provider: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
+      refreshArgs: ['sso', 'login', '--profile=team-admin'],
+    };
+
+    const normalized = normalizeApplicationSettings(settings);
+
+    expect(normalized.auth).toMatchObject({
+      awsProfile: 'team-admin',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json', '--profile', 'team-admin'],
+      refreshArgs: ['sso', 'login', '--profile', 'team-admin'],
+    });
+  });
+
+  it('prefers the monitored legacy profile when check and refresh arguments disagree', () => {
+    const settings = createDefaultSettings();
+    settings.auth = {
+      ...settings.auth,
+      provider: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--profile', 'checked-account'],
+      refreshArgs: ['sso', 'login', '--profile', 'login-account'],
+    };
+
+    const normalized = normalizeApplicationSettings(settings);
+
+    expect(normalized.auth).toMatchObject({
+      awsProfile: 'checked-account',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json', '--profile', 'checked-account'],
+      refreshArgs: ['sso', 'login', '--profile', 'checked-account'],
     });
   });
 

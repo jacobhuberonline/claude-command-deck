@@ -537,6 +537,11 @@ function AuthenticationSettings({
             suffix="s"
             onChange={(value) => update({ checkIntervalSeconds: value })}
           />
+          <ToggleField
+            label="Check once at app start"
+            enabled={auth.startupChecksEnabled}
+            onToggle={() => update({ startupChecksEnabled: !auth.startupChecksEnabled })}
+          />
         </>
       ) : auth.provider === 'custom' ? (
         <>

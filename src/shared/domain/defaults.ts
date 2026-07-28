@@ -76,10 +76,18 @@ export const defaultAuthConfiguration: AuthConfiguration = {
 const AWS_CHECK_ARGS = ['sts', 'get-caller-identity', '--output', 'json'];
 const AWS_REFRESH_ARGS = ['sso', 'login'];
 
-// The AWS provider hides its command plumbing: only the profile and check interval are
-// user-adjustable. Everything else is derived here so every reader sees a consistent command.
+// The AWS provider hides its command plumbing. Profile, interval, and startup consent remain
+// user-adjustable.
 export function normalizeAuthConfiguration(auth: AuthConfiguration): AuthConfiguration {
-  return auth.provider === 'aws' ? applyAwsPreset(auth) : auth;
+  if (auth.provider !== 'aws') {
+    return auth;
+  }
+
+  const awsProfile =
+    auth.awsProfile.trim() ||
+    findAwsProfileArgument(auth.checkArgs) ||
+    findAwsProfileArgument(auth.refreshArgs);
+  return applyAwsPreset({ ...auth, awsProfile });
 }
 
 export function applyAwsPreset(auth: AuthConfiguration): AuthConfiguration {
@@ -97,8 +105,28 @@ export function applyAwsPreset(auth: AuthConfiguration): AuthConfiguration {
     shellMode: false,
     checkTimeoutSeconds: defaultAuthConfiguration.checkTimeoutSeconds,
     expirationWarningMinutes: defaultAuthConfiguration.expirationWarningMinutes,
-    startupChecksEnabled: true,
   };
+}
+
+function findAwsProfileArgument(args: string[]): string {
+  for (let index = args.length - 1; index >= 0; index -= 1) {
+    const argument = args[index]?.trim() ?? '';
+    if (argument === '--profile') {
+      const profile = args[index + 1]?.trim();
+      if (profile) {
+        return profile;
+      }
+    }
+
+    if (argument.startsWith('--profile=')) {
+      const profile = argument.slice('--profile='.length).trim();
+      if (profile) {
+        return profile;
+      }
+    }
+  }
+
+  return '';
 }
 
 export function createDefaultSessionConfiguration(

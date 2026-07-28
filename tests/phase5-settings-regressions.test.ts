@@ -92,6 +92,71 @@ describe('phase 5 settings migration regressions', () => {
     });
   });
 
+  it('migrates a legacy AWS profile without overriding the startup-check preference', () => {
+    const settings = createDefaultSettings();
+    const legacyAuth = {
+      ...settings.auth,
+      provider: 'aws' as const,
+      checkExecutable: 'aws',
+      checkArgs: [
+        'sts',
+        'get-caller-identity',
+        '--output',
+        'json',
+        '--profile',
+        'production-admin',
+      ],
+      refreshExecutable: 'aws',
+      refreshArgs: ['sso', 'login', '--profile', 'production-admin'],
+      startupChecksEnabled: false,
+    };
+    Reflect.deleteProperty(legacyAuth, 'awsProfile');
+    storeState.settings = {
+      ...settings,
+      auth: legacyAuth,
+    };
+
+    const loaded = new SettingsStore(logger).load();
+
+    expect(loaded.auth).toMatchObject({
+      provider: 'aws',
+      awsProfile: 'production-admin',
+      checkExecutable: 'aws',
+      checkArgs: [
+        'sts',
+        'get-caller-identity',
+        '--output',
+        'json',
+        '--profile',
+        'production-admin',
+      ],
+      refreshExecutable: 'aws',
+      refreshArgs: ['sso', 'login', '--profile', 'production-admin'],
+      startupChecksEnabled: false,
+    });
+  });
+
+  it('prefers an explicit AWS profile over stale legacy arguments', () => {
+    const settings = createDefaultSettings();
+    settings.auth = {
+      ...settings.auth,
+      provider: 'aws',
+      awsProfile: 'current-profile',
+      checkArgs: ['sts', 'get-caller-identity', '--profile', 'legacy-profile'],
+      refreshArgs: ['sso', 'login', '--profile=legacy-profile'],
+      startupChecksEnabled: true,
+    };
+
+    const normalized = normalizeApplicationSettings(settings);
+
+    expect(normalized.auth).toMatchObject({
+      awsProfile: 'current-profile',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json', '--profile', 'current-profile'],
+      refreshArgs: ['sso', 'login', '--profile', 'current-profile'],
+      startupChecksEnabled: true,
+    });
+  });
+
   it('deduplicates session IDs with the first configuration winning', () => {
     const settings = createDefaultSettings();
     const original = {

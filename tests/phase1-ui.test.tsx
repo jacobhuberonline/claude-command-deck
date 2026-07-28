@@ -118,6 +118,65 @@ describe('phase 1 visual shell', () => {
     expect(within(dialog).getByText('Schema v4')).toBeInTheDocument();
   });
 
+  it('preserves AWS startup consent while editing the derived profile preset', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth = {
+      ...snapshot.settings.auth,
+      provider: 'aws',
+      awsProfile: 'legacy',
+      checkExecutable: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json', '--profile', 'legacy'],
+      refreshExecutable: 'aws',
+      refreshArgs: ['sso', 'login', '--profile', 'legacy'],
+      startupChecksEnabled: false,
+    };
+    const bridge = createMockBridge(snapshot);
+    const updateAuthConfiguration = vi.mocked(bridge.updateAuthConfiguration);
+    window.commandDeck = bridge;
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Settings' }));
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Credential monitor' }));
+
+    const profile = within(dialog).getByRole('textbox', { name: 'AWS profile' });
+    expect(profile).toHaveValue('legacy');
+    expect(within(dialog).queryByRole('textbox', { name: 'Check executable' })).toBeNull();
+    expect(within(dialog).queryByRole('textbox', { name: 'Login executable' })).toBeNull();
+
+    const startupField = within(dialog)
+      .getByText('Check once at app start')
+      .closest<HTMLElement>('.settings-field');
+    expect(startupField).not.toBeNull();
+    const startupToggle = within(startupField!).getByRole('button', { name: 'Disabled' });
+
+    fireEvent.change(profile, { target: { value: '  production-admin  ' } });
+    expect(updateAuthConfiguration).not.toHaveBeenCalled();
+    fireEvent.blur(profile);
+
+    await waitFor(() => expect(updateAuthConfiguration).toHaveBeenCalledTimes(1));
+    expect(updateAuthConfiguration.mock.calls[0]?.[0].auth).toMatchObject({
+      awsProfile: 'production-admin',
+      checkArgs: [
+        'sts',
+        'get-caller-identity',
+        '--output',
+        'json',
+        '--profile',
+        'production-admin',
+      ],
+      refreshArgs: ['sso', 'login', '--profile', 'production-admin'],
+      startupChecksEnabled: false,
+    });
+
+    fireEvent.click(startupToggle);
+    await waitFor(() => expect(updateAuthConfiguration).toHaveBeenCalledTimes(2));
+    expect(updateAuthConfiguration.mock.calls[1]?.[0].auth).toMatchObject({
+      awsProfile: 'production-admin',
+      startupChecksEnabled: true,
+    });
+  });
+
   it('handles bay focus shortcuts while terminal input is focused', async () => {
     const snapshot = createMultiSessionState();
     window.commandDeck = createMockBridge(snapshot);
