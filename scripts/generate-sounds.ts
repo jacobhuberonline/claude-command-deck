@@ -34,15 +34,6 @@ const soundSet: Record<string, Tone[]> = {
     { startMs: 82, durationMs: 110, frequency: 329.63, gain: 0.1 },
     { startMs: 178, durationMs: 130, frequency: 261.63, gain: 0.09 },
   ],
-  'reload-all-complete.wav': [
-    { startMs: 0, durationMs: 85, frequency: 349.23, gain: 0.1 },
-    { startMs: 72, durationMs: 85, frequency: 523.25, gain: 0.1 },
-    { startMs: 144, durationMs: 110, frequency: 698.46, gain: 0.09 },
-  ],
-  'reload-all-warning.wav': [
-    { startMs: 0, durationMs: 115, frequency: 293.66, gain: 0.11 },
-    { startMs: 158, durationMs: 115, frequency: 246.94, gain: 0.11 },
-  ],
 };
 
 mkdirSync(outputDirectory, { recursive: true });

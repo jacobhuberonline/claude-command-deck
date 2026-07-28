@@ -21,6 +21,7 @@ interface SessionGridProps {
   focusMode: boolean;
   onFocusSession: (sessionId: SessionId) => void;
   onRequestTerminalFocus: () => void;
+  onToggleFocusMode: () => void;
   onAddSession: () => void;
   onRemoveSession: (sessionId: SessionId) => void;
   shellKind: ShellKind;
@@ -44,6 +45,7 @@ export function SessionGrid({
   focusMode,
   onFocusSession,
   onRequestTerminalFocus,
+  onToggleFocusMode,
   onAddSession,
   onRemoveSession,
   shellKind,
@@ -381,6 +383,8 @@ export function SessionGrid({
             terminalFocusRequest={terminalFocusRequest}
             isFocused
             isLarge
+            focusMode={focusMode}
+            onToggleFocusMode={onToggleFocusMode}
             shellKind={shellKind}
             shellOptions={shellOptions}
             onUpdateShellKind={onUpdateShellKind}

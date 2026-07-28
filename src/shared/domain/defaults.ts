@@ -54,7 +54,6 @@ export const defaultNotificationPreferences: NotificationPreferences = {
   authTransitions: true,
   sessionAttention: true,
   sessionCrash: true,
-  reloadAllSummary: true,
   cooldownMs: 60000,
 };
 

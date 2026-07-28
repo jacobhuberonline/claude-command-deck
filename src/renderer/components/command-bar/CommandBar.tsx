@@ -3,10 +3,8 @@ import {
   CircleAlert,
   CheckCircle2,
   Loader2,
-  PanelLeft,
   Plus,
   RefreshCcw,
-  RotateCcw,
   Settings,
   Volume2,
   VolumeX,
@@ -27,9 +25,7 @@ interface CommandBarProps {
   audio: AudioPreferences;
   focusMode: boolean;
   onOpenSettings: () => void;
-  onToggleFocusMode: () => void;
   onAddSession: () => void;
-  onReloadAll: () => void;
   onAuthAction: () => void;
   onToggleAudio: () => void;
 }
@@ -43,9 +39,7 @@ export function CommandBar({
   audio,
   focusMode,
   onOpenSettings,
-  onToggleFocusMode,
   onAddSession,
-  onReloadAll,
   onAuthAction,
   onToggleAudio,
 }: CommandBarProps) {
@@ -103,16 +97,6 @@ export function CommandBar({
           </button>
         ) : null}
         <button
-          className="control-button"
-          type="button"
-          title="Restart all active Claude sessions"
-          aria-label="Restart active Claude sessions"
-          onClick={onReloadAll}
-        >
-          <RotateCcw size={16} aria-hidden="true" />
-          <span>Restart Active</span>
-        </button>
-        <button
           className="icon-button"
           type="button"
           title={audio.masterEnabled ? 'Mute sounds' : 'Unmute sounds'}
@@ -127,15 +111,6 @@ export function CommandBar({
             DND
           </span>
         ) : null}
-        <button
-          className="icon-button"
-          type="button"
-          title={`${focusMode ? 'Show' : 'Hide'} session navigator (Alt+F)`}
-          aria-label={`${focusMode ? 'Show' : 'Hide'} session navigator`}
-          onClick={onToggleFocusMode}
-        >
-          <PanelLeft size={17} aria-hidden="true" />
-        </button>
         <button
           className="icon-button"
           type="button"

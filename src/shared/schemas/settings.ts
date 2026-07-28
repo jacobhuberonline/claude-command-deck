@@ -78,7 +78,6 @@ export const notificationPreferencesSchema = z.object({
   authTransitions: z.boolean(),
   sessionAttention: z.boolean(),
   sessionCrash: z.boolean(),
-  reloadAllSummary: z.boolean(),
   cooldownMs: z.number().int().min(0).max(600000),
 });
 

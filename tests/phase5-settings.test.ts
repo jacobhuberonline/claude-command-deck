@@ -13,6 +13,19 @@ describe('phase 5 settings validation', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('drops the retired bulk-restart notification preference from saved settings', () => {
+    const settings = createDefaultSettings();
+    const parsed = applicationSettingsSchema.parse({
+      ...settings,
+      notifications: {
+        ...settings.notifications,
+        reloadAllSummary: true,
+      },
+    });
+
+    expect(parsed.notifications).not.toHaveProperty('reloadAllSummary');
+  });
+
   it('accepts only supported shell kinds and defaults to automatic discovery', () => {
     const settings = createDefaultSettings();
 

@@ -62,14 +62,6 @@ export const defaultSoundRegistry: SoundRegistry = {
   'auth.connected': { id: 'auth-connected', url: './sounds/auth-connected.wav' },
   'auth.disconnected': { id: 'auth-disconnected', url: './sounds/auth-disconnected.wav' },
   'auth.refresh_failed': { id: 'error', url: './sounds/error.wav' },
-  'reload_all.completed': {
-    id: 'reload-all-complete',
-    url: './sounds/reload-all-complete.wav',
-  },
-  'reload_all.partially_failed': {
-    id: 'reload-all-warning',
-    url: './sounds/reload-all-warning.wav',
-  },
 };
 
 export class AudioService {
@@ -448,7 +440,6 @@ function isErrorEvent(event: AudioEvent): boolean {
   return (
     event === 'session.reload_failed' ||
     event === 'session.crashed' ||
-    event === 'auth.refresh_failed' ||
-    event === 'reload_all.partially_failed'
+    event === 'auth.refresh_failed'
   );
 }

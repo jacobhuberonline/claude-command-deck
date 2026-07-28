@@ -20,8 +20,6 @@ The script `scripts/generate-sounds.ts` deterministically synthesizes short mono
 - `auth-connected.wav`
 - `auth-disconnected.wav`
 - `error.wav`
-- `reload-all-complete.wav`
-- `reload-all-warning.wav`
 
 ## License
 

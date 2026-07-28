@@ -143,8 +143,6 @@ const soundAssetNames = [
   'auth-connected.wav',
   'auth-disconnected.wav',
   'error.wav',
-  'reload-all-complete.wav',
-  'reload-all-warning.wav',
 ];
 
 // Keep usage tracking disabled until the UX and data handling are intentionally reviewed.
@@ -1372,41 +1370,6 @@ export function App() {
     return launchPreparedClaude(prepared);
   }
 
-  async function reloadAll() {
-    const candidates = appState.sessions.filter(
-      (session) =>
-        session.configuration.workingDirectory &&
-        session.runtime.processState === 'running' &&
-        session.runtime.processType === 'claudeSession',
-    );
-    if (candidates.length === 0) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Restart ${candidates.length} active Claude session${candidates.length === 1 ? '' : 's'} in sequence?`,
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    let failures = 0;
-    for (const session of candidates) {
-      const ok = await withSessionOperation(session.configuration.id, () =>
-        reloadContinue(session.configuration.id, {
-          skipConfirm: true,
-          emitSessionEvent: false,
-        }),
-      );
-      if (!ok) {
-        failures += 1;
-      }
-      await delay(450);
-    }
-
-    emitSemanticEvents([failures === 0 ? 'reload_all.completed' : 'reload_all.partially_failed']);
-  }
-
   async function stopForRestart(prepared: PreparedClaudeLaunch): Promise<boolean> {
     const { sessionId, planId, hasActiveProcess } = prepared;
     if (hasActiveProcess) {
@@ -1849,12 +1812,8 @@ export function App() {
         audio={appState.settings.audio}
         focusMode={focusMode}
         onOpenSettings={() => setSettingsSection('general')}
-        onToggleFocusMode={() => setFocusMode((current) => !current)}
         onAddSession={() => {
           void addSession();
-        }}
-        onReloadAll={() => {
-          void reloadAll();
         }}
         onAuthAction={() => {
           void connectAuthentication();
@@ -1873,6 +1832,7 @@ export function App() {
           focusMode={focusMode}
           onFocusSession={setFocusedSessionId}
           onRequestTerminalFocus={() => setTerminalFocusRequest((current) => current + 1)}
+          onToggleFocusMode={() => setFocusMode((current) => !current)}
           onAddSession={() => {
             void addSession();
           }}

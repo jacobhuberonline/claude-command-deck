@@ -184,9 +184,7 @@ export type AudioEvent =
   | 'session.crashed'
   | 'auth.connected'
   | 'auth.disconnected'
-  | 'auth.refresh_failed'
-  | 'reload_all.completed'
-  | 'reload_all.partially_failed';
+  | 'auth.refresh_failed';
 
 export interface QuietHoursConfiguration {
   enabled: boolean;
@@ -220,7 +218,6 @@ export interface NotificationPreferences {
   authTransitions: boolean;
   sessionAttention: boolean;
   sessionCrash: boolean;
-  reloadAllSummary: boolean;
   cooldownMs: number;
 }
 

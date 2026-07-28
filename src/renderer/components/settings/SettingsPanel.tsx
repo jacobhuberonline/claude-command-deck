@@ -426,8 +426,6 @@ const soundTests: Array<{ event: AudioEvent; label: string }> = [
   { event: 'auth.connected', label: 'Auth connected' },
   { event: 'auth.disconnected', label: 'Auth disconnected' },
   { event: 'session.crashed', label: 'Error' },
-  { event: 'reload_all.completed', label: 'Reload All complete' },
-  { event: 'reload_all.partially_failed', label: 'Reload All warning' },
 ];
 
 function AuthenticationSettings({
@@ -721,11 +719,6 @@ function NotificationSettings({
         label="Session crash"
         enabled={preferences.sessionCrash}
         onToggle={() => update({ sessionCrash: !preferences.sessionCrash })}
-      />
-      <ToggleField
-        label="Reload All summary"
-        enabled={preferences.reloadAllSummary}
-        onToggle={() => update({ reloadAllSummary: !preferences.reloadAllSummary })}
       />
       <RangeField
         label="Notification cooldown"

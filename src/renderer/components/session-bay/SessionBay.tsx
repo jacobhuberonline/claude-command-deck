@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   FolderOpen,
   FolderPen,
+  PanelLeft,
   Play,
   Square,
   TerminalSquare,
@@ -25,6 +26,8 @@ interface SessionBayProps {
   isFocused: boolean;
   isCompact?: boolean;
   isLarge?: boolean;
+  focusMode: boolean;
+  onToggleFocusMode: () => void;
   shellKind: ShellKind;
   shellOptions: ShellOption[];
   onUpdateShellKind: (shellKind: ShellKind) => void;
@@ -66,6 +69,8 @@ export function SessionBay({
   isFocused,
   isCompact = false,
   isLarge = false,
+  focusMode,
+  onToggleFocusMode,
   shellKind,
   shellOptions,
   onUpdateShellKind,
@@ -117,11 +122,20 @@ export function SessionBay({
             <small>{configuration.workingDirectory || 'Choose a working directory'}</small>
           </span>
         </div>
-        {configuration.workingDirectory && runtime.sameProject ? (
-          <div className="bay-header-actions">
+        <div className="bay-header-actions">
+          {configuration.workingDirectory && runtime.sameProject ? (
             <span className="same-project">Same project</span>
-          </div>
-        ) : null}
+          ) : null}
+          <button
+            className="icon-button quiet"
+            type="button"
+            title={`${focusMode ? 'Show' : 'Hide'} session navigator (Alt+F)`}
+            aria-label={`${focusMode ? 'Show' : 'Hide'} session navigator`}
+            onClick={onToggleFocusMode}
+          >
+            <PanelLeft size={15} aria-hidden="true" />
+          </button>
+        </div>
       </header>
 
       <div className="bay-meta">

@@ -28,7 +28,17 @@ describe('phase 1 visual shell', () => {
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.getByRole('searchbox', { name: 'Find a session' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Add session' })).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: 'Hide session navigator' })).toHaveLength(1);
+    expect(
+      within(screen.getByRole('article')).getByRole('button', {
+        name: 'Hide session navigator',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(document.querySelector<HTMLElement>('.command-bar')!).queryByRole('button', {
+        name: 'Hide session navigator',
+      }),
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Restart active Claude sessions' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Open session settings' })).toBeNull();
   });
 
@@ -233,43 +243,6 @@ describe('phase 1 visual shell', () => {
       expect(screen.getByRole('button', { name: /^1 Session 1/i })).toBeInTheDocument(),
     );
     expect(screen.getByRole('button', { name: /^2 Session 2/i })).toBeInTheDocument();
-  });
-
-  it('keeps shared-directory sessions running when bulk restart cannot ask for consent', async () => {
-    const snapshot = createMultiSessionState();
-    snapshot.settings.auth.startupChecksEnabled = false;
-    snapshot.sessions[0]!.configuration = {
-      ...snapshot.sessions[0]!.configuration,
-      workingDirectory: '/Users/example/shared-project',
-      launchMode: 'continueMostRecent',
-      hasNamedConversation: false,
-    };
-    snapshot.sessions[0]!.runtime = {
-      ...snapshot.sessions[0]!.runtime,
-      processState: 'running',
-      processType: 'claudeSession',
-      activityState: 'idle',
-    };
-    snapshot.sessions[1]!.configuration.workingDirectory = '/Users/example/shared-project/';
-    const stop = vi.fn(() => Promise.resolve({ ok: true as const }));
-    const prepareClaude = vi.fn(() =>
-      Promise.resolve({
-        ...successfulClaudePreparation('continueMostRecent'),
-        requiresAmbiguousContinueConsent: true,
-        hasActiveProcess: true,
-      }),
-    );
-    const bridge = createMockBridge(snapshot, {}, { stop, prepareClaude });
-    window.commandDeck = bridge;
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-
-    render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Restart active Claude sessions' }));
-
-    await waitFor(() => expect(prepareClaude).toHaveBeenCalled());
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(stop).not.toHaveBeenCalled();
-    expect(bridge.terminal.startClaude).not.toHaveBeenCalled();
   });
 
   it('opens the directory picker from explicit session controls', async () => {

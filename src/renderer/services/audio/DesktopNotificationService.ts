@@ -113,10 +113,6 @@ function isNotificationEnabled(event: AudioEvent, preferences: NotificationPrefe
     return preferences.sessionCrash;
   }
 
-  if (event === 'reload_all.completed' || event === 'reload_all.partially_failed') {
-    return preferences.reloadAllSummary;
-  }
-
   return false;
 }
 
@@ -165,20 +161,6 @@ function notificationCopy(
     return {
       title: `${name} needs attention`,
       body: 'The session failed or exited unexpectedly.',
-    };
-  }
-
-  if (event === 'reload_all.completed') {
-    return {
-      title: 'Reload All completed',
-      body: 'All configured project sessions finished the reload sequence.',
-    };
-  }
-
-  if (event === 'reload_all.partially_failed') {
-    return {
-      title: 'Reload All completed with failures',
-      body: 'One or more project sessions failed during the reload sequence.',
     };
   }
 
