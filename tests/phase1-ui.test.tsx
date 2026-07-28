@@ -343,7 +343,9 @@ describe('phase 1 visual shell', () => {
       name: /Session 1 session bay/i,
     });
 
-    fireEvent.click(within(article).getByRole('button', { name: 'Start Claude' }));
+    expect(within(article).queryByRole('button', { name: 'Start Claude' })).toBeNull();
+    expect(within(article).queryByRole('button', { name: 'Continue' })).toBeNull();
+    fireEvent.click(within(article).getByRole('button', { name: 'New' }));
 
     await waitFor(() =>
       expect(startClaude).toHaveBeenCalledWith({
@@ -357,7 +359,7 @@ describe('phase 1 visual shell', () => {
     );
   });
 
-  it('can safely restart one running session without restarting the whole deck', async () => {
+  it('can safely resume one running session without restarting the whole deck', async () => {
     const snapshot = createPhaseOneState('test');
     snapshot.settings.auth.startupChecksEnabled = false;
     snapshot.sessions[0]!.configuration = {
@@ -387,9 +389,9 @@ describe('phase 1 visual shell', () => {
     const article = await screen.findByRole('article', {
       name: /Session 1 session bay/i,
     });
-    const continueButton = within(article).getByRole('button', { name: 'Continue' });
-    expect(continueButton).toBeEnabled();
-    fireEvent.click(continueButton);
+    const resumeButton = within(article).getByRole('button', { name: 'Resume…' });
+    expect(resumeButton).toBeEnabled();
+    fireEvent.click(resumeButton);
 
     await waitFor(() =>
       expect(stop).toHaveBeenCalledWith({
@@ -484,7 +486,7 @@ describe('phase 1 visual shell', () => {
     const article = await screen.findByRole('article', {
       name: /Session 1 session bay/i,
     });
-    fireEvent.click(within(article).getByRole('button', { name: 'Start Claude' }));
+    fireEvent.click(within(article).getByRole('button', { name: 'New' }));
     await waitFor(() => expect(bridge.terminal.startClaude).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -494,10 +496,12 @@ describe('phase 1 visual shell', () => {
         claudeSessionName: 'deck-session-1-authoritative',
       });
     });
-    expect(within(article).getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+    expect(within(article).queryByRole('button', { name: 'Continue' })).toBeNull();
+    expect(within(article).getByRole('button', { name: 'New' })).toBeInTheDocument();
+    expect(within(article).getByRole('button', { name: 'Resume…' })).toBeInTheDocument();
   });
 
-  it('refuses to degrade an exact named resume to directory-most-recent', async () => {
+  it('does not launch when a specific resume cannot be prepared', async () => {
     const snapshot = createPhaseOneState('test');
     snapshot.settings.auth.startupChecksEnabled = false;
     snapshot.sessions[0]!.configuration = {
@@ -521,7 +525,7 @@ describe('phase 1 visual shell', () => {
     const article = await screen.findByRole('article', {
       name: /Session 1 session bay/i,
     });
-    fireEvent.click(within(article).getByRole('button', { name: 'Continue' }));
+    fireEvent.click(within(article).getByRole('button', { name: 'Resume…' }));
 
     await waitFor(() => expect(prepareClaude).toHaveBeenCalled());
     expect(startClaude).not.toHaveBeenCalled();

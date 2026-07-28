@@ -57,12 +57,6 @@ export function SessionWorkbench({
   const launchBlocked =
     ['starting', 'restarting', 'stopping'].includes(runtime.processState) ||
     (runtime.processState === 'error' && processAttached);
-  const primaryMode: SessionLaunchMode = configuration.hasNamedConversation
-    ? 'continueMostRecent'
-    : configuration.launchMode === 'continueMostRecent'
-      ? 'continueMostRecent'
-      : 'new';
-  const primaryContinues = primaryMode === 'continueMostRecent';
   const presetModel = presetModels.find(
     (option) => option.value === configuration.model.trim().toLowerCase(),
   );
@@ -113,19 +107,6 @@ export function SessionWorkbench({
             <>
               <button
                 className="control-button primary"
-                type="button"
-                disabled={launchBlocked}
-                onClick={() => onLaunchClaude(configuration.id, primaryMode)}
-              >
-                {primaryContinues ? (
-                  <RotateCcw size={15} aria-hidden="true" />
-                ) : (
-                  <Play size={15} aria-hidden="true" />
-                )}
-                <span>{primaryContinues ? 'Continue' : 'Start Claude'}</span>
-              </button>
-              <button
-                className="control-button"
                 type="button"
                 disabled={launchBlocked}
                 onClick={() => onLaunchClaude(configuration.id, 'new')}
