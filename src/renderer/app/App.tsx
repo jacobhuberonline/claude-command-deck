@@ -1847,6 +1847,7 @@ export function App() {
         usageEnabled={usageTrackerEnabled}
         sessions={appState.sessions}
         audio={appState.settings.audio}
+        focusMode={focusMode}
         onOpenSettings={() => setSettingsSection('general')}
         onToggleFocusMode={() => setFocusMode((current) => !current)}
         onAddSession={() => {
@@ -1872,14 +1873,12 @@ export function App() {
           focusMode={focusMode}
           onFocusSession={setFocusedSessionId}
           onRequestTerminalFocus={() => setTerminalFocusRequest((current) => current + 1)}
-          onToggleFocusMode={() => setFocusMode((current) => !current)}
           onAddSession={() => {
             void addSession();
           }}
           onRemoveSession={(sessionId) => {
             void removeSession(sessionId);
           }}
-          onOpenSettings={() => setSettingsSection('claude')}
           shellKind={appState.settings.shellKind}
           shellOptions={shellOptions}
           onUpdateShellKind={(shellKind) => {

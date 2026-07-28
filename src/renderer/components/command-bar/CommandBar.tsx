@@ -25,6 +25,7 @@ interface CommandBarProps {
   usageEnabled: boolean;
   sessions: SessionSnapshot[];
   audio: AudioPreferences;
+  focusMode: boolean;
   onOpenSettings: () => void;
   onToggleFocusMode: () => void;
   onAddSession: () => void;
@@ -40,6 +41,7 @@ export function CommandBar({
   usageEnabled,
   sessions,
   audio,
+  focusMode,
   onOpenSettings,
   onToggleFocusMode,
   onAddSession,
@@ -88,16 +90,18 @@ export function CommandBar({
       </div>
 
       <div className="command-actions">
-        <button
-          className="control-button primary"
-          type="button"
-          title="Add a Claude session directory (Alt+N)"
-          aria-label="Add session"
-          onClick={onAddSession}
-        >
-          <Plus size={16} aria-hidden="true" />
-          <span>Session</span>
-        </button>
+        {focusMode ? (
+          <button
+            className="control-button primary"
+            type="button"
+            title="Add a Claude session directory (Alt+N)"
+            aria-label="Add session"
+            onClick={onAddSession}
+          >
+            <Plus size={16} aria-hidden="true" />
+            <span>Session</span>
+          </button>
+        ) : null}
         <button
           className="control-button"
           type="button"
@@ -126,8 +130,8 @@ export function CommandBar({
         <button
           className="icon-button"
           type="button"
-          title="Hide or show session navigator (Alt+F)"
-          aria-label="Toggle session navigator"
+          title={`${focusMode ? 'Show' : 'Hide'} session navigator (Alt+F)`}
+          aria-label={`${focusMode ? 'Show' : 'Hide'} session navigator`}
           onClick={onToggleFocusMode}
         >
           <PanelLeft size={17} aria-hidden="true" />

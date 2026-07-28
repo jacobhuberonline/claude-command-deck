@@ -27,6 +27,23 @@ describe('phase 1 visual shell', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.getByRole('searchbox', { name: 'Find a session' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Add session' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Hide session navigator' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Open session settings' })).toBeNull();
+  });
+
+  it('keeps session creation available when the navigator is hidden', async () => {
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Hide session navigator',
+      }),
+    );
+
+    expect(screen.queryByRole('complementary', { name: 'Session navigator' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Add session' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Show session navigator' })).toBeInTheDocument();
   });
 
   it('keeps placeholder session controls unavailable until saved state loads', async () => {
