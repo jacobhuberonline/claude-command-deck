@@ -7,6 +7,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import type { SessionSnapshot } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
 import { recordTerminalSize } from '../../services/terminal/TerminalSizeRegistry';
+import { recoverTerminalFocusAfterFullscreenExit } from '../../services/terminal/TerminalInputFocusRecovery';
 import type { TerminalReplayStore } from '../../services/terminal/TerminalReplayStore';
 
 interface TerminalPaneProps {
@@ -129,6 +130,17 @@ export function TerminalPane({
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
     searchAddonRef.current = searchAddon;
+    let focusRecoveryFrame: number | null = null;
+    const bufferDisposable = terminal.buffer.onBufferChange((buffer) => {
+      if (focusRecoveryFrame !== null) {
+        window.cancelAnimationFrame(focusRecoveryFrame);
+        focusRecoveryFrame = null;
+      }
+
+      if (buffer.type === 'normal') {
+        focusRecoveryFrame = recoverTerminalFocusAfterFullscreenExit(terminal);
+      }
+    });
     terminal.writeln('\x1b[36mLOCAL SYSTEM\x1b[0m');
     terminal.writeln(initialStatusMessageRef.current);
     const offReplay = terminalReplayStore.subscribe(session.configuration.id, (event) => {
@@ -250,7 +262,11 @@ export function TerminalPane({
     return () => {
       container.removeEventListener('paste', onNativePaste, true);
       container.removeEventListener('wheel', onWheel);
+      if (focusRecoveryFrame !== null) {
+        window.cancelAnimationFrame(focusRecoveryFrame);
+      }
       resizeObserver?.disconnect();
+      bufferDisposable.dispose();
       offReplay();
       dataDisposable.dispose();
       terminal.dispose();
