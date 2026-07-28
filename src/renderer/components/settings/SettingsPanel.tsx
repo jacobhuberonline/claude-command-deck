@@ -578,7 +578,7 @@ function AudioSettings({
         onToggle={() => update({ doNotDisturb: !audio.doNotDisturb })}
       />
       <ToggleField
-        label="Routine focus suppression"
+        label="Mute routine sounds while viewing a session"
         enabled={audio.onlyWhenUnfocused}
         onToggle={() => update({ onlyWhenUnfocused: !audio.onlyWhenUnfocused })}
       />
@@ -615,6 +615,15 @@ function AudioSettings({
         step={500}
         suffix="ms"
         onChange={(value) => update({ cooldownMs: value })}
+      />
+      <RangeField
+        label="Completion quiet period"
+        value={audio.completionSilenceMs}
+        min={1000}
+        max={15000}
+        step={500}
+        suffix="ms"
+        onChange={(value) => update({ completionSilenceMs: value })}
       />
       <RangeField
         label="Minimum active duration"
@@ -768,6 +777,13 @@ function SessionAudioRow({
         onClick={() => update({ attentionEnabled: !preferences.attentionEnabled })}
       >
         Attention {preferences.attentionEnabled ? 'on' : 'off'}
+      </button>
+      <button
+        className="control-button"
+        type="button"
+        onClick={() => update({ onlyWhenUnfocused: !preferences.onlyWhenUnfocused })}
+      >
+        Routine {preferences.onlyWhenUnfocused ? 'unfocused only' : 'always'}
       </button>
       <button
         className="control-button"

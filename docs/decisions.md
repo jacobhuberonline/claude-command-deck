@@ -74,7 +74,8 @@
 
 - Added an isolated renderer activity classifier with a small rolling text window.
 - Centralized conservative permission, awaiting-input, and authentication warning patterns.
-- Completion is emitted only after sustained activity exceeds the configured minimum duration.
+- Completion is emitted after the configurable quiet period when output was sustained or followed submitted terminal input; it remains a local estimate.
+- Terminal control sequences are removed before prompt matching, attention is edge-triggered, and attention supersedes estimated completion.
 - The classifier clears local rolling state when a session exits and never sends terminal text to a remote service.
 
 ## Phase 8
@@ -82,6 +83,8 @@
 - Generated original local WAV assets with `scripts/generate-sounds.ts`; runtime generation is not used.
 - Added renderer audio and notification services that consume semantic events and apply master mute, Do Not Disturb, quiet hours, cooldowns, focus suppression, and per-session preferences.
 - Added Settings controls for global audio, quiet hours, test sounds, notification preferences, and per-session audio toggles.
+- Renderer-relative packaged asset URLs, eager preload, in-flight deduplication, background monitoring, and playback diagnostics make cues prompt and observable.
+- Focus suppression applies to routine ready/completion cues, not waiting, permission, authentication, or error attention cues.
 - Reload All now emits one aggregate success or warning event instead of one completion cue per bay.
 
 ## Phase 9

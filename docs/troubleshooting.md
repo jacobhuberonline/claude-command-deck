@@ -26,7 +26,7 @@ The monitor reports only its configured provider check and does not directly ins
 
 ## Sounds Do Not Play
 
-Open Settings, Audio and check master mute, Do Not Disturb, quiet hours, per-session audio toggles, and focused-session suppression. Regenerate assets with `npm run generate:sounds` if diagnostics report missing sound files.
+Open Settings, Audio and check master mute, Do Not Disturb, quiet hours, per-session audio toggles, and “Mute routine sounds while viewing a session.” Use the test-sound buttons, then open Diagnostics if playback still fails. The completion cue is inferred from terminal output becoming quiet; adjust **Completion quiet period** for timing and **Minimum active duration** for unsolicited output cycles. Waiting and permission cues are not focus-suppressed. Regenerate assets with `npm run generate:sounds` only if diagnostics report missing sound files.
 
 ## Notifications Do Not Appear
 

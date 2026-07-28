@@ -27,7 +27,6 @@ export interface ActivityClassification {
 
 export interface ActivityClassifierOptions {
   rollingWindowChars: number;
-  activeWindowMs: number;
   idleWindowMs: number;
   minimumActivityMs: number;
 }
@@ -39,13 +38,13 @@ interface ActivityTracker {
   activeSinceMs: number | null;
   lastOutputMs: number | null;
   completionEmitted: boolean;
+  submissionObserved: boolean;
 }
 
 const defaultOptions: ActivityClassifierOptions = {
   rollingWindowChars: 2400,
-  activeWindowMs: 2500,
-  idleWindowMs: 6500,
-  minimumActivityMs: 10000,
+  idleWindowMs: 3500,
+  minimumActivityMs: 3000,
 };
 
 const permissionPromptPatterns = [
@@ -68,9 +67,13 @@ const authenticationWarningPatterns = [
 
 const awaitingInputPatterns = [
   /\bpress enter\b/i,
+  /\benter to (continue|confirm|submit)\b/i,
   /\bselect an option\b/i,
+  /\bchoose (an?|one) option\b/i,
   /\btype (a )?(choice|response)\b/i,
-  /\bwaiting for (your )?(input|response)\b/i,
+  /\b(?:waiting|awaiting) (for )?(your )?(input|response|approval)\b/i,
+  /(?:^|\n)[^\n]{0,160}\?\s*(?:\(\s*)?(?:yes\s*\/\s*no|y\s*\/\s*n)(?:\s*\))?\s*$/i,
+  /(?:^|\n)[^\n]{0,160}(?:\(\s*y\s*\/\s*n\s*\)|\[\s*y\s*\/\s*n\s*\])\s*[:?]?\s*$/i,
   /\bcontinue\?\s*$/i,
 ];
 
@@ -87,27 +90,42 @@ export class ActivityClassifier {
     this.options = { ...this.options, ...options };
   }
 
+  recordInput(sessionId: SessionId, data: string, nowMs = Date.now()): void {
+    if (!data.includes('\r') && !data.includes('\n')) {
+      return;
+    }
+
+    const tracker = this.getTracker(sessionId);
+    tracker.rollingText = '';
+    tracker.activityState = 'unknown';
+    tracker.confidence = 'low';
+    tracker.activeSinceMs = nowMs;
+    tracker.lastOutputMs = null;
+    tracker.completionEmitted = false;
+    tracker.submissionObserved = true;
+  }
+
   recordOutput(sessionId: SessionId, data: string, nowMs = Date.now()): ActivityClassification {
     const tracker = this.getTracker(sessionId);
+    const normalizedData = normalizeTerminalText(data);
     tracker.lastOutputMs = nowMs;
-    tracker.rollingText = this.trimRollingText(`${tracker.rollingText}${data}`);
+    tracker.rollingText = this.trimRollingText(`${tracker.rollingText}${normalizedData}`);
 
     const detected = this.detectAttentionState(tracker.rollingText);
     if (detected) {
-      if (detected.activityState === 'authenticationMayBeRequired') {
-        // Credential warnings are edge-triggered. Keeping one in the rolling window would make
-        // every later chunk repeat it until enough unrelated terminal output displaced it.
-        tracker.rollingText = '';
-      }
-      const events = this.eventsForAttentionState(detected.activityState);
-      const completionEvent = this.maybeEmitEstimatedCompletion(tracker, nowMs);
-      if (completionEvent) {
-        events.unshift(completionEvent);
-      }
+      const events =
+        tracker.activityState === detected.activityState
+          ? []
+          : this.eventsForAttentionState(detected.activityState);
 
       tracker.activityState = detected.activityState;
       tracker.confidence = detected.confidence;
       tracker.completionEmitted = true;
+      tracker.activeSinceMs = null;
+      tracker.submissionObserved = false;
+      // Treat prompts as edge-triggered. Retaining matched prompt text would keep later,
+      // unrelated output in an attention state until the rolling window displaced it.
+      tracker.rollingText = '';
 
       return {
         activityState: detected.activityState,
@@ -119,10 +137,21 @@ export class ActivityClassifier {
       };
     }
 
+    if (isAttentionState(tracker.activityState) && normalizedData.trim().length === 0) {
+      return {
+        activityState: tracker.activityState,
+        confidence: tracker.confidence,
+        attention: true,
+        statusMessage: statusMessageForAttentionState(tracker.activityState),
+        events: [],
+        lastOutputAt: new Date(nowMs).toISOString(),
+      };
+    }
+
     const events: ActivitySemanticEvent[] =
       tracker.activityState === 'active' ? [] : ['session.activity_started'];
     if (tracker.activityState !== 'active' || tracker.activeSinceMs === null) {
-      tracker.activeSinceMs = nowMs;
+      tracker.activeSinceMs ??= nowMs;
       tracker.completionEmitted = false;
     }
 
@@ -163,15 +192,22 @@ export class ActivityClassifier {
       return null;
     }
 
-    const events: ActivitySemanticEvent[] =
-      tracker.activityState === 'active' ? ['session.activity_stopped'] : [];
-    const completionEvent = this.maybeEmitEstimatedCompletion(tracker, nowMs);
+    if (tracker.activityState !== 'active') {
+      return null;
+    }
+
+    const events: ActivitySemanticEvent[] = ['session.activity_stopped'];
+    const completionEvent = this.maybeEmitEstimatedCompletion(tracker);
     if (completionEvent) {
       events.push(completionEvent);
     }
 
     tracker.activityState = 'idle';
     tracker.confidence = completionEvent ? 'medium' : 'low';
+    tracker.activeSinceMs = null;
+    tracker.lastOutputMs = null;
+    tracker.submissionObserved = false;
+    tracker.rollingText = '';
 
     return {
       activityState: 'idle',
@@ -201,6 +237,7 @@ export class ActivityClassifier {
       activeSinceMs: null,
       lastOutputMs: null,
       completionEmitted: false,
+      submissionObserved: false,
     };
     this.trackers.set(sessionId, tracker);
     return tracker;
@@ -260,20 +297,86 @@ export class ActivityClassifier {
     return [];
   }
 
-  private maybeEmitEstimatedCompletion(
-    tracker: ActivityTracker,
-    nowMs: number,
-  ): ActivitySemanticEvent | null {
-    if (tracker.completionEmitted || tracker.activeSinceMs === null) {
+  private maybeEmitEstimatedCompletion(tracker: ActivityTracker): ActivitySemanticEvent | null {
+    if (
+      tracker.completionEmitted ||
+      tracker.activeSinceMs === null ||
+      tracker.lastOutputMs === null
+    ) {
       return null;
     }
 
-    const activeDurationMs = nowMs - tracker.activeSinceMs;
-    if (activeDurationMs < this.options.minimumActivityMs) {
+    const outputDurationMs = tracker.lastOutputMs - tracker.activeSinceMs;
+    if (!tracker.submissionObserved && outputDurationMs < this.options.minimumActivityMs) {
       return null;
     }
 
     tracker.completionEmitted = true;
     return 'session.estimated_completion';
   }
+}
+
+function isAttentionState(activityState: ActivityState): boolean {
+  return (
+    activityState === 'likelyAwaitingInput' ||
+    activityState === 'possiblePermissionPrompt' ||
+    activityState === 'authenticationMayBeRequired'
+  );
+}
+
+function statusMessageForAttentionState(activityState: ActivityState): string {
+  if (activityState === 'possiblePermissionPrompt') {
+    return 'Possible permission prompt detected.';
+  }
+
+  if (activityState === 'authenticationMayBeRequired') {
+    return 'Credential-related terminal output detected.';
+  }
+
+  return 'Likely awaiting input.';
+}
+
+function normalizeTerminalText(value: string): string {
+  let result = '';
+
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 27) {
+      const introducer = value[index + 1];
+      if (introducer === '[') {
+        index += 2;
+        while (index < value.length) {
+          const sequenceCode = value.charCodeAt(index);
+          if (sequenceCode >= 0x40 && sequenceCode <= 0x7e) {
+            break;
+          }
+          index += 1;
+        }
+      } else if (introducer === ']') {
+        index += 2;
+        while (index < value.length) {
+          const sequenceCode = value.charCodeAt(index);
+          if (sequenceCode === 7) {
+            break;
+          }
+          if (sequenceCode === 27 && value[index + 1] === '\\') {
+            index += 1;
+            break;
+          }
+          index += 1;
+        }
+      } else {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (code === 13) {
+      result += '\n';
+    } else if (code === 9 || code === 10 || code >= 32) {
+      result += value[index];
+    }
+  }
+
+  return result;
 }

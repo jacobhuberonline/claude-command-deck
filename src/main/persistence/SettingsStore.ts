@@ -303,23 +303,65 @@ export function migrateSettings(raw: unknown): unknown {
   }
 
   const candidate = raw as Partial<ApplicationSettings>;
-  const sessions =
-    candidate.schemaVersion === 1 && Array.isArray(candidate.sessions)
-      ? candidate.sessions.map((session) => ({
+  const sourceVersion = typeof candidate.schemaVersion === 'number' ? candidate.schemaVersion : 1;
+  const defaults = createDefaultSettings();
+  const defaultSessionAudio = createDefaultSessionConfiguration('migration').audio;
+  const sessions = Array.isArray(candidate.sessions)
+    ? candidate.sessions.map((rawSession) => {
+        if (!rawSession || typeof rawSession !== 'object') {
+          return rawSession;
+        }
+
+        const session = rawSession as Partial<SessionConfiguration>;
+        const sessionAudio =
+          session.audio && typeof session.audio === 'object'
+            ? (session.audio as Partial<SessionAudioPreferences>)
+            : {};
+        return {
           ...session,
-          executable: session.executable === 'claude' ? '' : session.executable,
-        }))
-      : candidate.sessions;
+          executable:
+            sourceVersion === 1 && session.executable === 'claude' ? '' : session.executable,
+          audio: {
+            ...defaultSessionAudio,
+            ...sessionAudio,
+            // Earlier releases set this hidden per-session flag to true, which meant the
+            // visible global focus-suppression switch could never fully disable suppression.
+            onlyWhenUnfocused:
+              sourceVersion < 4 ? false : (sessionAudio.onlyWhenUnfocused ?? false),
+          },
+        };
+      })
+    : candidate.sessions;
+  const candidateAudio =
+    candidate.audio && typeof candidate.audio === 'object'
+      ? (candidate.audio as Partial<AudioPreferences>)
+      : {};
+  const candidateQuietHours =
+    candidateAudio.quietHours && typeof candidateAudio.quietHours === 'object'
+      ? candidateAudio.quietHours
+      : {};
   const shellKind: ShellKind = SHELL_KINDS.includes(candidate.shellKind as ShellKind)
     ? (candidate.shellKind as ShellKind)
     : 'auto';
 
   return {
-    ...createDefaultSettings(),
+    ...defaults,
     ...candidate,
     schemaVersion: SETTINGS_SCHEMA_VERSION,
     shellKind,
     sessions,
+    audio: {
+      ...defaults.audio,
+      ...candidateAudio,
+      completionSilenceMs:
+        sourceVersion < 4
+          ? defaults.audio.completionSilenceMs
+          : (candidateAudio.completionSilenceMs ?? defaults.audio.completionSilenceMs),
+      quietHours: {
+        ...defaults.audio.quietHours,
+        ...candidateQuietHours,
+      },
+    },
     restoreOnLaunch: undefined,
   };
 }

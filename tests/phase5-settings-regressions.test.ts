@@ -43,7 +43,7 @@ describe('phase 5 settings migration regressions', () => {
 
     const loaded = new SettingsStore(logger).load();
 
-    expect(loaded.schemaVersion).toBe(3);
+    expect(loaded.schemaVersion).toBe(4);
     expect(loaded.sessions[0]?.executable).toBe('');
     expect(loaded.sessions[1]?.executable).toBe('/opt/claude-custom');
   });
@@ -53,9 +53,24 @@ describe('phase 5 settings migration regressions', () => {
 
     const loaded = new SettingsStore(logger).load();
 
-    expect(loaded.schemaVersion).toBe(3);
+    expect(loaded.schemaVersion).toBe(4);
     expect(loaded.shellKind).toBe('auto');
     expect(loaded).not.toHaveProperty('shellExecutable');
+  });
+
+  it('migrates v3 audio timing and hidden focus suppression defaults', () => {
+    const legacy = createVersionThreeSettings();
+    storeState.settings = legacy;
+
+    const loaded = new SettingsStore(logger).load();
+
+    expect(loaded.schemaVersion).toBe(4);
+    expect(loaded.audio.completionSilenceMs).toBe(3500);
+    expect(loaded.sessions[0]?.audio.onlyWhenUnfocused).toBe(false);
+    expect(storeState.settings).toMatchObject({
+      schemaVersion: 4,
+      audio: { completionSilenceMs: 3500 },
+    });
   });
 
   it('preserves an unnamed v1 continue-most-recent session as legacy-continuable', () => {
@@ -160,5 +175,23 @@ function createVersionTwoSettings() {
     ...legacy,
     schemaVersion: 2,
     sessions: current.sessions.map((session) => ({ ...session })),
+  };
+}
+
+function createVersionThreeSettings() {
+  const current = createDefaultSettings();
+  const legacyAudio = { ...current.audio };
+  Reflect.deleteProperty(legacyAudio, 'completionSilenceMs');
+  return {
+    ...current,
+    schemaVersion: 3,
+    audio: legacyAudio,
+    sessions: current.sessions.map((session) => ({
+      ...session,
+      audio: {
+        ...session.audio,
+        onlyWhenUnfocused: true,
+      },
+    })),
   };
 }

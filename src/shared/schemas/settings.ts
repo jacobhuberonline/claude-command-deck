@@ -68,6 +68,7 @@ export const audioPreferencesSchema = z.object({
   errorEnabled: z.boolean(),
   onlyWhenUnfocused: z.boolean(),
   cooldownMs: z.number().int().min(0).max(600000),
+  completionSilenceMs: z.number().int().min(1000).max(60000),
   minimumActivityMs: z.number().int().min(0).max(600000),
   quietHours: quietHoursConfigurationSchema,
 });

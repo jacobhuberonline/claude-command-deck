@@ -1,6 +1,6 @@
 export const SESSION_IDS = ['session-1', 'session-2', 'session-3', 'session-4'] as const;
 export const MAX_SESSION_COUNT = 32;
-export const SETTINGS_SCHEMA_VERSION = 3;
+export const SETTINGS_SCHEMA_VERSION = 4;
 
 export type SessionId = string;
 
@@ -210,6 +210,7 @@ export interface AudioPreferences {
   errorEnabled: boolean;
   onlyWhenUnfocused: boolean;
   cooldownMs: number;
+  completionSilenceMs: number;
   minimumActivityMs: number;
   quietHours: QuietHoursConfiguration;
 }

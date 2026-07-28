@@ -20,7 +20,7 @@ const defaultSessionAudio: SessionAudioPreferences = {
   attentionEnabled: true,
   errorEnabled: true,
   volumeMultiplier: 1,
-  onlyWhenUnfocused: true,
+  onlyWhenUnfocused: false,
 };
 
 const defaultQuietHours: QuietHoursConfiguration = {
@@ -44,7 +44,8 @@ export const defaultAudioPreferences: AudioPreferences = {
   errorEnabled: true,
   onlyWhenUnfocused: true,
   cooldownMs: 4500,
-  minimumActivityMs: 10000,
+  completionSilenceMs: 3500,
+  minimumActivityMs: 3000,
   quietHours: defaultQuietHours,
 };
 

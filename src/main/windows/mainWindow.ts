@@ -26,6 +26,9 @@ export function createMainWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      // Completion and attention monitoring intentionally continues while this supervisor
+      // window is minimized or covered.
+      backgroundThrottling: false,
     },
   });
 

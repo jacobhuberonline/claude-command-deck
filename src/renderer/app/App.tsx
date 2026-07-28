@@ -20,7 +20,7 @@ import type {
   ShellOption,
   SettingsSection,
 } from '../../shared/domain/types';
-import type { CommandDeckBridge, CommandResult } from '../../shared/ipc/contracts';
+import type { CommandDeckBridge, CommandResult, TerminalBridge } from '../../shared/ipc/contracts';
 import { AuthConsole } from '../components/auth-console/AuthConsole';
 import { CommandBar } from '../components/command-bar/CommandBar';
 import { SessionGrid } from '../components/session-bay/SessionGrid';
@@ -29,7 +29,13 @@ import {
   ActivityClassifier,
   type ActivityClassification,
 } from '../services/activity/ActivityClassifier';
-import { AudioService, defaultSoundRegistry } from '../services/audio/AudioService';
+import { writeWithActivityTracking } from '../services/activity/ActivityTrackingTerminalBridge';
+import {
+  AudioService,
+  canLoadSoundAsset,
+  defaultSoundRegistry,
+  preloadSoundAssets,
+} from '../services/audio/AudioService';
 import { DesktopNotificationService } from '../services/audio/DesktopNotificationService';
 import { getTerminalSize } from '../services/terminal/TerminalSizeRegistry';
 import { TerminalReplayStore } from '../services/terminal/TerminalReplayStore';
@@ -215,6 +221,16 @@ export function App() {
     checkedAt: new Date().toISOString(),
   }));
   const bridge = useMemo(() => getBridge(), []);
+  const activityAwareTerminalBridge = useMemo<TerminalBridge>(
+    () => ({
+      ...bridge.terminal,
+      write: (request) =>
+        writeWithActivityTracking(bridge.terminal, request, (sessionId, data, nowMs) => {
+          activityClassifierRef.current.recordInput(sessionId, data, nowMs);
+        }),
+    }),
+    [bridge],
+  );
   const appStateRef = useRef(appState);
   const focusedSessionIdRef = useRef(focusedSessionId);
   const startupAuthAttemptedRef = useRef(false);
@@ -267,6 +283,12 @@ export function App() {
   }, [focusedSessionId]);
 
   useEffect(() => {
+    if (import.meta.env.MODE !== 'test') {
+      preloadSoundAssets(defaultSoundRegistry);
+    }
+  }, []);
+
+  useEffect(() => {
     if (
       !appStateLoadedRef.current ||
       !appState.settings.sessions.some((session) => session.id === focusedSessionId)
@@ -289,9 +311,10 @@ export function App() {
 
   useEffect(() => {
     activityClassifierRef.current.configure({
+      idleWindowMs: appState.settings.audio.completionSilenceMs,
       minimumActivityMs: appState.settings.audio.minimumActivityMs,
     });
-  }, [appState.settings.audio.minimumActivityMs]);
+  }, [appState.settings.audio.completionSilenceMs, appState.settings.audio.minimumActivityMs]);
 
   const updateRuntime = useCallback(
     (
@@ -372,15 +395,44 @@ export function App() {
       );
 
       events.forEach((event) => {
-        void audioServiceRef.current.handleEvent(event, {
-          preferences: current.settings.audio,
-          sessionId: options.sessionId,
-          sessionPreferences: session?.configuration.audio,
-          focusedSessionId: focusedId,
-          appFocused,
-          relevantSessionWatched,
-          force: options.forceAudio,
-        });
+        void audioServiceRef.current
+          .handleEvent(event, {
+            preferences: current.settings.audio,
+            sessionId: options.sessionId,
+            sessionPreferences: session?.configuration.audio,
+            focusedSessionId: focusedId,
+            appFocused,
+            relevantSessionWatched,
+            force: options.forceAudio,
+          })
+          .then((decision) => {
+            if (decision.reason === 'playback_failed') {
+              setAppState((latest) => ({
+                ...latest,
+                diagnostics: [
+                  ...latest.diagnostics.filter((diagnostic) => diagnostic.id !== 'audio-playback'),
+                  {
+                    id: 'audio-playback',
+                    label: 'Audio playback',
+                    status: 'warn',
+                    detail: `Unable to play the local ${decision.asset?.id ?? 'notification'} sound. Open Audio settings and try the sound again.`,
+                    checkedAt: new Date().toISOString(),
+                  },
+                ],
+              }));
+            } else if (decision.played) {
+              setAppState((latest) =>
+                latest.diagnostics.some((diagnostic) => diagnostic.id === 'audio-playback')
+                  ? {
+                      ...latest,
+                      diagnostics: latest.diagnostics.filter(
+                        (diagnostic) => diagnostic.id !== 'audio-playback',
+                      ),
+                    }
+                  : latest,
+              );
+            }
+          });
 
         if (!options.forceAudio) {
           notificationServiceRef.current.notify(event, {
@@ -685,6 +737,9 @@ export function App() {
         exitCode,
         statusMessage: crashed ? 'Process exited unexpectedly.' : 'Process stopped.',
       });
+      if (crashed) {
+        emitSemanticEvents(['session.crashed'], { sessionId });
+      }
     });
     const offConversationBinding = bridge.terminal.onConversationBinding(
       ({ sessionId, processId, claudeSessionName }) => {
@@ -761,7 +816,7 @@ export function App() {
       activityUpdates.forEach(({ sessionId, activity }) => {
         emitSemanticEvents(activity.events, { sessionId });
       });
-    }, 1500);
+    }, 500);
 
     return () => window.clearInterval(interval);
   }, [emitSemanticEvents]);
@@ -1851,7 +1906,7 @@ export function App() {
           onReorderSessions={(sessionIds) => {
             void updateSessionOrder(sessionIds);
           }}
-          terminalBridge={bridge.terminal}
+          terminalBridge={activityAwareTerminalBridge}
           terminalFocusRequest={terminalFocusRequest}
           terminalReplayStore={terminalReplayStore}
         />
@@ -2053,12 +2108,7 @@ function authTransitionEvent(previous: AuthStatus, next: AuthStatus): AudioEvent
 async function countAvailableSoundAssets(): Promise<number> {
   const checks = await Promise.all(
     soundAssetNames.map(async (asset) => {
-      try {
-        const response = await fetch(`/sounds/${asset}`, { method: 'HEAD' });
-        return response.ok;
-      } catch {
-        return false;
-      }
+      return canLoadSoundAsset(`./sounds/${asset}`);
     }),
   );
 

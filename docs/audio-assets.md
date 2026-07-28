@@ -10,7 +10,7 @@ Run:
 npm run generate:sounds
 ```
 
-The script `scripts/generate-sounds.ts` deterministically synthesizes short mono 16-bit WAV files with simple sine tones and envelopes, then writes them to `public/sounds`. Runtime sound generation is not used; the renderer only plays committed local files.
+The script `scripts/generate-sounds.ts` deterministically synthesizes short mono 16-bit WAV files with simple sine tones and envelopes, then writes them to `public/sounds`. Runtime sound generation is not used; the renderer preloads and plays committed local files through renderer-relative URLs so development and packaged `file:` pages resolve the same assets.
 
 ## Files
 

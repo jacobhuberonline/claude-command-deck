@@ -35,6 +35,7 @@ export type AudioDecisionReason =
   | 'focused_suppression'
   | 'latched'
   | 'cooldown'
+  | 'in_flight'
   | 'playback_failed';
 
 export interface AudioDecision {
@@ -47,24 +48,27 @@ export interface AudioDecision {
 export type SoundPlayer = (asset: SoundAsset, volume: number) => Promise<void> | void;
 
 export const defaultSoundRegistry: SoundRegistry = {
-  'session.ready': { id: 'session-ready', url: '/sounds/session-ready.wav' },
+  'session.ready': { id: 'session-ready', url: './sounds/session-ready.wav' },
   'session.estimated_completion': {
     id: 'estimated-completion',
-    url: '/sounds/estimated-completion.wav',
+    url: './sounds/estimated-completion.wav',
   },
-  'session.likely_awaiting_input': { id: 'attention', url: '/sounds/attention.wav' },
-  'session.possible_permission_prompt': { id: 'attention', url: '/sounds/attention.wav' },
-  'session.authentication_may_be_required': { id: 'attention', url: '/sounds/attention.wav' },
-  'session.reload_completed': { id: 'session-ready', url: '/sounds/session-ready.wav' },
-  'session.reload_failed': { id: 'error', url: '/sounds/error.wav' },
-  'session.crashed': { id: 'error', url: '/sounds/error.wav' },
-  'auth.connected': { id: 'auth-connected', url: '/sounds/auth-connected.wav' },
-  'auth.disconnected': { id: 'auth-disconnected', url: '/sounds/auth-disconnected.wav' },
-  'auth.refresh_failed': { id: 'error', url: '/sounds/error.wav' },
-  'reload_all.completed': { id: 'reload-all-complete', url: '/sounds/reload-all-complete.wav' },
+  'session.likely_awaiting_input': { id: 'attention', url: './sounds/attention.wav' },
+  'session.possible_permission_prompt': { id: 'attention', url: './sounds/attention.wav' },
+  'session.authentication_may_be_required': { id: 'attention', url: './sounds/attention.wav' },
+  'session.reload_completed': { id: 'session-ready', url: './sounds/session-ready.wav' },
+  'session.reload_failed': { id: 'error', url: './sounds/error.wav' },
+  'session.crashed': { id: 'error', url: './sounds/error.wav' },
+  'auth.connected': { id: 'auth-connected', url: './sounds/auth-connected.wav' },
+  'auth.disconnected': { id: 'auth-disconnected', url: './sounds/auth-disconnected.wav' },
+  'auth.refresh_failed': { id: 'error', url: './sounds/error.wav' },
+  'reload_all.completed': {
+    id: 'reload-all-complete',
+    url: './sounds/reload-all-complete.wav',
+  },
   'reload_all.partially_failed': {
     id: 'reload-all-warning',
-    url: '/sounds/reload-all-warning.wav',
+    url: './sounds/reload-all-warning.wav',
   },
 };
 
@@ -72,6 +76,8 @@ export class AudioService {
   private readonly cooldowns = new Map<string, number>();
 
   private readonly completionLatch = new Set<SessionId>();
+
+  private readonly inFlight = new Set<string>();
 
   private authDisconnectedLatched = false;
 
@@ -113,6 +119,10 @@ export class AudioService {
     }
 
     const cooldownKey = this.cooldownKey(event, context.sessionId);
+    if (!context.force && this.inFlight.has(cooldownKey)) {
+      return { event, played: false, reason: 'in_flight', asset };
+    }
+
     const lastPlayedAt = this.cooldowns.get(cooldownKey);
     if (
       !context.force &&
@@ -123,9 +133,12 @@ export class AudioService {
     }
 
     try {
+      this.inFlight.add(cooldownKey);
       await this.player(asset, this.volumeFor(context.preferences, context.sessionPreferences));
     } catch {
       return { event, played: false, reason: 'playback_failed', asset };
+    } finally {
+      this.inFlight.delete(cooldownKey);
     }
 
     this.cooldowns.set(cooldownKey, now.getTime());
@@ -208,10 +221,109 @@ export class AudioService {
   }
 }
 
+const preloadedAudio = new Map<string, HTMLAudioElement>();
+const activeAudio = new Set<HTMLAudioElement>();
+
+export function preloadSoundAssets(registry: SoundRegistry = defaultSoundRegistry): void {
+  if (typeof Audio === 'undefined') {
+    return;
+  }
+
+  Object.values(registry).forEach((asset) => {
+    if (!asset) {
+      return;
+    }
+
+    const url = resolveSoundAssetUrl(asset.url);
+    if (preloadedAudio.has(url)) {
+      return;
+    }
+
+    const audio = new Audio(url);
+    audio.preload = 'auto';
+    preloadedAudio.set(url, audio);
+    try {
+      audio.load();
+    } catch {
+      preloadedAudio.delete(url);
+    }
+  });
+}
+
+export function resolveSoundAssetUrl(assetUrl: string, baseUrl?: string): string {
+  const resolvedBaseUrl =
+    baseUrl ?? (typeof document === 'undefined' ? undefined : document.baseURI);
+  return resolvedBaseUrl ? new URL(assetUrl, resolvedBaseUrl).toString() : assetUrl;
+}
+
+export function canLoadSoundAsset(
+  assetUrl: string,
+  timeoutMs = 2000,
+  createAudio: (url: string) => HTMLAudioElement = (url) => new Audio(url),
+): Promise<boolean> {
+  if (typeof Audio === 'undefined') {
+    return Promise.resolve(false);
+  }
+
+  const url = resolveSoundAssetUrl(assetUrl);
+  const template = preloadedAudio.get(url);
+  const audio = template ? (template.cloneNode(true) as HTMLAudioElement) : createAudio(url);
+  audio.src = url;
+  audio.preload = 'metadata';
+
+  if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (available: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.clearTimeout(timeout);
+      audio.removeEventListener('loadedmetadata', onLoaded);
+      audio.removeEventListener('error', onError);
+      resolve(available);
+    };
+    const onLoaded = () => finish(true);
+    const onError = () => finish(false);
+    const timeout = window.setTimeout(() => finish(false), timeoutMs);
+    audio.addEventListener('loadedmetadata', onLoaded, { once: true });
+    audio.addEventListener('error', onError, { once: true });
+    try {
+      audio.load();
+    } catch {
+      finish(false);
+    }
+  });
+}
+
 function htmlAudioPlayer(asset: SoundAsset, volume: number): Promise<void> {
-  const audio = new Audio(asset.url);
+  const url = resolveSoundAssetUrl(asset.url);
+  const template = preloadedAudio.get(url);
+  const audio = template ? (template.cloneNode(true) as HTMLAudioElement) : new Audio(url);
+  audio.src = url;
+  audio.preload = 'auto';
   audio.volume = volume;
-  return audio.play();
+  activeAudio.add(audio);
+  const release = () => {
+    activeAudio.delete(audio);
+  };
+  audio.addEventListener('ended', release, { once: true });
+  audio.addEventListener('error', release, { once: true });
+
+  try {
+    const playback = audio.play();
+    return playback.catch((error: unknown) => {
+      release();
+      throw error;
+    });
+  } catch (error) {
+    release();
+    return Promise.reject(error instanceof Error ? error : new Error('Audio playback failed.'));
+  }
 }
 
 function isDoNotDisturbActive(preferences: AudioPreferences, now: Date): boolean {
@@ -321,12 +433,7 @@ function shouldSuppressForFocus(event: AudioEvent, context: AudioEventContext): 
 }
 
 function isRoutineSessionEvent(event: AudioEvent): boolean {
-  return (
-    event === 'session.ready' ||
-    event === 'session.estimated_completion' ||
-    event === 'session.likely_awaiting_input' ||
-    event === 'session.possible_permission_prompt'
-  );
+  return event === 'session.ready' || event === 'session.estimated_completion';
 }
 
 function isAttentionEvent(event: AudioEvent): boolean {

@@ -88,7 +88,7 @@ describe('phase 1 visual shell', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Settings' });
     expect(within(dialog).getByRole('button', { name: 'Credential monitor' })).toBeInTheDocument();
-    expect(within(dialog).getByText('Schema v3')).toBeInTheDocument();
+    expect(within(dialog).getByText('Schema v4')).toBeInTheDocument();
   });
 
   it('handles bay focus shortcuts while terminal input is focused', async () => {
@@ -768,6 +768,66 @@ describe('phase 1 visual shell', () => {
     });
 
     expect(within(article).getByText('zsh is attached to this bay.')).toBeInTheDocument();
+  });
+
+  it('plays the error cue when the active session process crashes', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    snapshot.sessions[0]!.configuration.workingDirectory = '/Users/example/project';
+    const stateListeners: Array<Parameters<CommandDeckBridge['terminal']['onState']>[0]> = [];
+    const exitListeners: Array<Parameters<CommandDeckBridge['terminal']['onExit']>[0]> = [];
+    window.commandDeck = createMockBridge(
+      snapshot,
+      {},
+      {
+        onState: vi.fn<CommandDeckBridge['terminal']['onState']>((listener) => {
+          stateListeners.push(listener);
+          return () => undefined;
+        }),
+        onExit: vi.fn<CommandDeckBridge['terminal']['onExit']>((listener) => {
+          exitListeners.push(listener);
+          return () => undefined;
+        }),
+      },
+    );
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    play.mockClear();
+
+    render(<App />);
+    const article = await screen.findByRole('article', {
+      name: /Session 1 session bay/i,
+    });
+
+    act(() => {
+      stateListeners.forEach((listener) =>
+        listener({
+          sessionId: 'session-1',
+          snapshot: {
+            id: 'process-current',
+            type: 'claudeSession',
+            sessionId: 'session-1',
+            workingDirectory: '/Users/example/project',
+            executable: 'claude',
+            args: [],
+            startedAt: new Date().toISOString(),
+            state: 'running',
+            restartGeneration: 0,
+          },
+        }),
+      );
+      exitListeners.forEach((listener) =>
+        listener({
+          sessionId: 'session-1',
+          processId: 'process-current',
+          exitCode: 1,
+          signal: null,
+          crashed: true,
+        }),
+      );
+    });
+
+    expect(await within(article).findByText('Process exited unexpectedly.')).toBeInTheDocument();
+    await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
   });
 
   it('verifies connected auth and starts refresh from one action when the check fails', async () => {

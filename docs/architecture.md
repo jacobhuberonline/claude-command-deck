@@ -62,7 +62,7 @@ Credential monitoring supports disabled, AWS preset, and custom command modes. I
 
 ## Audio And Notifications
 
-Renderer-side audio listens for semantic events and decides whether to play local sound assets based on global preferences, per-session preferences, focused session, application focus, cooldowns, Do Not Disturb, and quiet hours. Native notifications are optional and only focus UI when clicked.
+Renderer-side audio listens for semantic events and decides whether to play local sound assets based on global preferences, per-session preferences, focused session, application focus, cooldowns, Do Not Disturb, and quiet hours. Packaged assets use renderer-relative URLs and are preloaded to avoid filesystem-root resolution and first-play decode delays. Completion remains a local PTY-silence estimate rather than an authoritative Claude lifecycle signal; submitted input makes short tasks eligible, the quiet period is configurable, and monitoring timers continue while the supervisor window is backgrounded. Attention events are edge-triggered and take priority over estimated completion. Native notifications are optional and only focus UI when clicked.
 
 ## Persistence Boundaries
 
