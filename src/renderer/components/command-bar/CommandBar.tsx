@@ -14,7 +14,7 @@ import type {
   AuthStateSnapshot,
   SessionSnapshot,
 } from '../../../shared/domain/types';
-import type { MonthlyUsageSnapshot } from '../../app/App';
+import type { MonthlyUsageSnapshot } from '../../services/usage/UsageCache';
 
 interface CommandBarProps {
   appVersion: string;

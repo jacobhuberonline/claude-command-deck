@@ -2,7 +2,8 @@ import type { MonthlyUsageResult } from '../../shared/domain/types';
 import type { SafeLogger } from '../logging/SafeLogger';
 import type { EntraAuthService } from './EntraAuthService';
 
-const USAGE_ENDPOINT = 'https://co2vb54rz2.execute-api.us-east-2.amazonaws.com/api/governance/invoke';
+const USAGE_ENDPOINT =
+  'https://co2vb54rz2.execute-api.us-east-2.amazonaws.com/api/governance/invoke';
 const USAGE_ORIGIN = 'https://ai-sentinel.symplr.com';
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -15,7 +16,14 @@ export class UsageService {
   async getMonthlyUsage(): Promise<MonthlyUsageResult> {
     const accessToken = await this.authService.getAccessToken();
     if (!accessToken) {
-      return { ok: false, error: 'Sign in to AI Sentinel in Settings to load usage.' };
+      const authRequired = !this.authService.isSignedIn();
+      return {
+        ok: false,
+        error: authRequired
+          ? 'Sign in to AI Sentinel in Settings to load usage.'
+          : 'Unable to refresh the AI Sentinel session. Try again shortly.',
+        authRequired,
+      };
     }
 
     const email = this.authService.getSignedInEmail()?.trim();

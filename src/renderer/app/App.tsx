@@ -41,12 +41,7 @@ import { DesktopNotificationService } from '../services/audio/DesktopNotificatio
 import { getTerminalSize } from '../services/terminal/TerminalSizeRegistry';
 import { TerminalReplayStore } from '../services/terminal/TerminalReplayStore';
 import { invokeCommand, useSettingsPersistence } from '../services/settings/SettingsPersistence';
-
-export interface MonthlyUsageSnapshot {
-  amountUsd: number;
-  limitUsd: number | null;
-  observedAt: string;
-}
+import { parseStoredUsage, type MonthlyUsageSnapshot } from '../services/usage/UsageCache';
 
 const fallbackShellOptions: ShellOption[] = [
   { kind: 'auto', label: 'Automatic (recommended)', available: true },
@@ -158,7 +153,7 @@ const soundAssetNames = [
   'error.wav',
 ];
 
-const usageStorageKey = 'claude-command-deck:last-usage-v2';
+const usageStorageKey = 'claude-command-deck:last-usage-v3';
 const usageRefreshIntervalMs = 15 * 60 * 1000;
 const usageUrl = 'https://ai-sentinel.symplr.com/my-usage';
 const minimumAuthCheckIntervalSeconds = 30;
@@ -183,10 +178,10 @@ function hasDesktopBridge() {
   return Boolean(window.commandDeck);
 }
 
-function loadStoredUsage(): MonthlyUsageSnapshot | null {
+function loadStoredUsage(accountEmail: string | null): MonthlyUsageSnapshot | null {
   try {
     const raw = window.localStorage.getItem(usageStorageKey);
-    return raw ? (JSON.parse(raw) as MonthlyUsageSnapshot) : null;
+    return parseStoredUsage(raw, accountEmail);
   } catch {
     return null;
   }
@@ -201,9 +196,7 @@ export function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [authConsoleOpen, setAuthConsoleOpen] = useState(false);
   const [shellOptions, setShellOptions] = useState<ShellOption[]>(fallbackShellOptions);
-  const [usageSnapshot, setUsageSnapshot] = useState<MonthlyUsageSnapshot | null>(() =>
-    typeof window !== 'undefined' ? loadStoredUsage() : null,
-  );
+  const [usageSnapshot, setUsageSnapshot] = useState<MonthlyUsageSnapshot | null>(null);
   const [usageAuth, setUsageAuth] = useState<UsageAuthSnapshot>({ signedIn: false, email: null });
   const activityClassifierRef = useRef(new ActivityClassifier());
   const audioServiceRef = useRef(new AudioService(defaultSoundRegistry));
@@ -911,27 +904,43 @@ export function App() {
   ]);
 
   const refreshUsage = useCallback(async () => {
-    const result = await invokeCommand(
-      () => bridge.getUsage(),
-      'Unable to load usage from AI Sentinel.',
-    );
-    if (!result.ok) {
-      addPreferenceDiagnostic('usage', 'Usage', result.error);
-      return;
-    }
-
-    const snapshot: MonthlyUsageSnapshot = {
-      amountUsd: result.amountUsd,
-      limitUsd: result.limitUsd,
-      observedAt: result.observedAt,
-    };
-    setUsageSnapshot(snapshot);
     try {
-      window.localStorage.setItem(usageStorageKey, JSON.stringify(snapshot));
-    } catch {
-      // A failed cache write is non-fatal; the live value is already displayed.
+      const result = await bridge.getUsage();
+      if (!result.ok) {
+        if (result.authRequired) {
+          setUsageAuth({ signedIn: false, email: null });
+          setUsageSnapshot(null);
+          try {
+            window.localStorage.removeItem(usageStorageKey);
+          } catch {
+            // Ignore cache-clear failures; the in-memory value is already cleared.
+          }
+        }
+        addPreferenceDiagnostic('usage', 'Usage', result.error);
+        return;
+      }
+
+      const snapshot: MonthlyUsageSnapshot = {
+        amountUsd: result.amountUsd,
+        limitUsd: result.limitUsd,
+        month: result.month,
+        observedAt: result.observedAt,
+        accountEmail: usageAuth.email ?? '',
+      };
+      setUsageSnapshot(snapshot);
+      try {
+        window.localStorage.setItem(usageStorageKey, JSON.stringify(snapshot));
+      } catch {
+        // A failed cache write is non-fatal; the live value is already displayed.
+      }
+    } catch (error) {
+      addPreferenceDiagnostic(
+        'usage',
+        'Usage',
+        error instanceof Error ? error.message : 'Unable to load usage from AI Sentinel.',
+      );
     }
-  }, [addPreferenceDiagnostic, bridge]);
+  }, [addPreferenceDiagnostic, bridge, usageAuth.email]);
 
   const signInUsage = useCallback(async () => {
     try {
@@ -943,6 +952,7 @@ export function App() {
         return;
       }
       setUsageAuth({ signedIn: true, email: result.email });
+      setUsageSnapshot(loadStoredUsage(result.email));
     } catch (error) {
       addPreferenceDiagnostic(
         'usage-auth',
@@ -970,7 +980,10 @@ export function App() {
 
     void bridge
       .getUsageAuth()
-      .then((snapshot) => setUsageAuth(snapshot))
+      .then((snapshot) => {
+        setUsageAuth(snapshot);
+        setUsageSnapshot(snapshot.signedIn ? loadStoredUsage(snapshot.email) : null);
+      })
       .catch(() => undefined);
   }, [appStateLoaded, bridge]);
 

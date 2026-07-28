@@ -248,6 +248,7 @@ export type MonthlyUsageResult =
   | {
       ok: false;
       error: string;
+      authRequired?: boolean;
     };
 
 export interface ApplicationSettings {

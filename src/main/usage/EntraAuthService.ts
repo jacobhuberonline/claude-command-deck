@@ -26,6 +26,16 @@ interface StoredShape {
   email?: string;
 }
 
+class TokenEndpointError extends Error {
+  constructor(
+    readonly status: number,
+    readonly oauthError: string | null,
+  ) {
+    super(`Token endpoint returned ${status}.`);
+    this.name = 'TokenEndpointError';
+  }
+}
+
 export interface EntraAccount {
   email: string;
 }
@@ -77,9 +87,20 @@ export class EntraAuthService {
       const tokenState = await this.refresh(refreshToken);
       this.persist(tokenState);
       return tokenState.accessToken;
-    } catch {
-      // A rejected refresh token means the session must be re-established interactively.
-      this.signOut();
+    } catch (error) {
+      if (error instanceof TokenEndpointError && error.oauthError === 'invalid_grant') {
+        // Entra uses invalid_grant when the stored refresh token can no longer be redeemed.
+        this.signOut();
+      } else {
+        this.logger.warn('Usage token refresh failed; stored session retained.', {
+          reason:
+            error instanceof TokenEndpointError
+              ? `http_${error.status}`
+              : error instanceof Error
+                ? error.name
+                : 'unknown',
+        });
+      }
       return null;
     }
   }
@@ -206,11 +227,12 @@ export class EntraAuthService {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
+      const oauthError = readOAuthError(detail);
       this.logger.warn('Usage token exchange failed', {
         status: response.status,
-        detail: detail.slice(0, 300),
+        oauthError: oauthError ?? 'unknown',
       });
-      throw new Error(`Token endpoint returned ${response.status}.`);
+      throw new TokenEndpointError(response.status, oauthError);
     }
 
     const payload = (await response.json()) as {
@@ -280,5 +302,14 @@ function readEmailClaim(accessToken: string): string {
     ).trim();
   } catch {
     return '';
+  }
+}
+
+function readOAuthError(detail: string): string | null {
+  try {
+    const payload = JSON.parse(detail) as { error?: unknown };
+    return typeof payload.error === 'string' ? payload.error : null;
+  } catch {
+    return null;
   }
 }
