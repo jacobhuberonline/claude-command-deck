@@ -16,6 +16,10 @@ export const openExternalDirectoryRequestSchema = z.object({
   sessionId: sessionIdSchema,
 });
 
+export const openExternalUrlRequestSchema = z.object({
+  url: z.string().trim().min(1).max(2048),
+});
+
 export const selectDirectoryRequestSchema = z.object({
   sessionId: sessionIdSchema,
 });

@@ -34,9 +34,30 @@ const bridge: CommandDeckBridge = {
       Awaited<ReturnType<CommandDeckBridge['openDirectory']>>
     >;
   },
+  openExternalUrl: (request) => {
+    return ipcRenderer.invoke(IPC_CHANNELS.appOpenExternalUrl, request) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['openExternalUrl']>>
+    >;
+  },
   openLogDirectory: () =>
     ipcRenderer.invoke(IPC_CHANNELS.appOpenLogDirectory) as Promise<
       Awaited<ReturnType<CommandDeckBridge['openLogDirectory']>>
+    >,
+  getUsage: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.appGetUsage) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['getUsage']>>
+    >,
+  getUsageAuth: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.appGetUsageAuth) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['getUsageAuth']>>
+    >,
+  signInUsage: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.appSignInUsage) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['signInUsage']>>
+    >,
+  signOutUsage: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.appSignOutUsage) as Promise<
+      Awaited<ReturnType<CommandDeckBridge['signOutUsage']>>
     >,
   selectDirectory: (request) => {
     return ipcRenderer.invoke(IPC_CHANNELS.appSelectDirectory, request) as Promise<

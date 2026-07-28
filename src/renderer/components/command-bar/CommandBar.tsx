@@ -14,13 +14,15 @@ import type {
   AuthStateSnapshot,
   SessionSnapshot,
 } from '../../../shared/domain/types';
-import type { ClaudeUsageSnapshot } from '../../services/usage/ClaudeUsageParser';
+import type { MonthlyUsageSnapshot } from '../../app/App';
 
 interface CommandBarProps {
   appVersion: string;
   auth: AuthStateSnapshot;
-  usage: ClaudeUsageSnapshot | null;
+  usage: MonthlyUsageSnapshot | null;
   usageEnabled: boolean;
+  usageUrl: string;
+  onOpenUsage: () => void;
   sessions: SessionSnapshot[];
   audio: AudioPreferences;
   focusMode: boolean;
@@ -35,6 +37,8 @@ export function CommandBar({
   auth,
   usage,
   usageEnabled,
+  usageUrl,
+  onOpenUsage,
   sessions,
   audio,
   focusMode,
@@ -66,17 +70,6 @@ export function CommandBar({
       </div>
 
       <div className="count-strip" aria-label="Session counts">
-        {usageEnabled ? (
-          <Metric
-            label={usage?.label ?? 'Usage'}
-            value={usage ? formatUsd(usage.amountUsd) : '--'}
-            title={
-              usage
-                ? `${usage.source} (${formatObservedAt(usage.observedAt)})`
-                : 'Run /usage in a Claude session to update this.'
-            }
-          />
-        ) : null}
         <Metric label="Running" value={running} />
         <Metric label="Busy" value={busy} />
         <Metric label="Awaiting" value={awaiting} />
@@ -94,6 +87,21 @@ export function CommandBar({
           >
             <Plus size={16} aria-hidden="true" />
             <span>Session</span>
+          </button>
+        ) : null}
+        {usageEnabled ? (
+          <button
+            className={`metric metric-link usage-pill metric-${usage ? usageTone(usage) : 'neutral'}`}
+            type="button"
+            title={
+              usage
+                ? `${usage.limitUsd !== null ? `Limit ${formatUsd(usage.limitUsd)}. ` : ''}Updated ${formatObservedAt(usage.observedAt)}. Open AI Sentinel for details.`
+                : `Open AI Sentinel (${usageUrl}) for your monthly usage.`
+            }
+            onClick={onOpenUsage}
+          >
+            <span>This month</span>
+            <strong>{usage ? formatUsd(usage.amountUsd) : '--'}</strong>
           </button>
         ) : null}
         <button
@@ -175,6 +183,8 @@ function CommandDeckMark() {
   );
 }
 
+type MetricTone = 'neutral' | 'warning' | 'danger';
+
 function Metric({
   label,
   value,
@@ -183,7 +193,7 @@ function Metric({
 }: {
   label: string;
   value: number | string;
-  tone?: 'neutral' | 'warning';
+  tone?: MetricTone;
   title?: string;
 }) {
   return (
@@ -194,11 +204,27 @@ function Metric({
   );
 }
 
+function usageTone(usage: MonthlyUsageSnapshot): MetricTone {
+  if (usage.limitUsd === null || usage.limitUsd <= 0) {
+    return 'neutral';
+  }
+
+  const ratio = usage.amountUsd / usage.limitUsd;
+  if (ratio >= 1) {
+    return 'danger';
+  }
+  if (ratio >= 0.8) {
+    return 'warning';
+  }
+  return 'neutral';
+}
+
 function formatUsd(amount: number) {
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency: 'USD',
-    maximumFractionDigits: amount >= 10 ? 0 : 2,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount);
 }
 

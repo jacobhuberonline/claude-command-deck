@@ -186,6 +186,30 @@ h1 {
   color: var(--amber);
 }
 
+.metric-danger strong {
+  color: var(--red);
+}
+
+.metric-link {
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.usage-pill {
+  gap: 6px;
+}
+
+.metric-link:hover {
+  border-color: rgba(124, 151, 171, 0.4);
+  background: rgba(24, 33, 44, 0.9);
+}
+
+.metric-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
 .command-actions {
   justify-content: end;
   gap: 5px;

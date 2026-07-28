@@ -19,6 +19,7 @@ import type {
   ShellKind,
   ShellOption,
   SettingsSection,
+  UsageAuthSnapshot,
 } from '../../shared/domain/types';
 import type { CommandDeckBridge, CommandResult, TerminalBridge } from '../../shared/ipc/contracts';
 import { AuthConsole } from '../components/auth-console/AuthConsole';
@@ -39,11 +40,13 @@ import {
 import { DesktopNotificationService } from '../services/audio/DesktopNotificationService';
 import { getTerminalSize } from '../services/terminal/TerminalSizeRegistry';
 import { TerminalReplayStore } from '../services/terminal/TerminalReplayStore';
-import {
-  parseClaudeUsageOutput,
-  type ClaudeUsageSnapshot,
-} from '../services/usage/ClaudeUsageParser';
 import { invokeCommand, useSettingsPersistence } from '../services/settings/SettingsPersistence';
+
+export interface MonthlyUsageSnapshot {
+  amountUsd: number;
+  limitUsd: number | null;
+  observedAt: string;
+}
 
 const fallbackShellOptions: ShellOption[] = [
   { kind: 'auto', label: 'Automatic (recommended)', available: true },
@@ -62,8 +65,18 @@ const fallbackBridge = {
     Promise.resolve({ ok: false as const, error: 'Desktop session storage is not available.' }),
   openDirectory: () =>
     Promise.resolve({ ok: false as const, error: 'Desktop shell is not available.' }),
+  openExternalUrl: (request: { url: string }) => {
+    window.open(request.url, '_blank', 'noopener');
+    return Promise.resolve({ ok: true as const });
+  },
   openLogDirectory: () =>
     Promise.resolve({ ok: false as const, error: 'Desktop log directory is not available.' }),
+  getUsage: () =>
+    Promise.resolve({ ok: false as const, error: 'Desktop usage lookup is not available.' }),
+  getUsageAuth: () => Promise.resolve({ signedIn: false, email: null }),
+  signInUsage: () =>
+    Promise.resolve({ ok: false as const, error: 'Desktop sign-in is not available.' }),
+  signOutUsage: () => Promise.resolve({ ok: true as const }),
   selectDirectory: () =>
     Promise.resolve({
       ok: false as const,
@@ -145,9 +158,9 @@ const soundAssetNames = [
   'error.wav',
 ];
 
-// Keep usage tracking disabled until the UX and data handling are intentionally reviewed.
-const usageTrackerEnabled = false;
-const usageStorageKey = 'claude-command-deck:last-usage';
+const usageStorageKey = 'claude-command-deck:last-usage-v2';
+const usageRefreshIntervalMs = 15 * 60 * 1000;
+const usageUrl = 'https://ai-sentinel.symplr.com/my-usage';
 const minimumAuthCheckIntervalSeconds = 30;
 const authFailureConfirmationDelayMs = 350;
 const maxTerminalReplayBytes = 1024 * 1024;
@@ -170,10 +183,10 @@ function hasDesktopBridge() {
   return Boolean(window.commandDeck);
 }
 
-function loadStoredUsage(): ClaudeUsageSnapshot | null {
+function loadStoredUsage(): MonthlyUsageSnapshot | null {
   try {
     const raw = window.localStorage.getItem(usageStorageKey);
-    return raw ? (JSON.parse(raw) as ClaudeUsageSnapshot) : null;
+    return raw ? (JSON.parse(raw) as MonthlyUsageSnapshot) : null;
   } catch {
     return null;
   }
@@ -188,9 +201,10 @@ export function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [authConsoleOpen, setAuthConsoleOpen] = useState(false);
   const [shellOptions, setShellOptions] = useState<ShellOption[]>(fallbackShellOptions);
-  const [usageSnapshot, setUsageSnapshot] = useState<ClaudeUsageSnapshot | null>(() =>
-    usageTrackerEnabled && typeof window !== 'undefined' ? loadStoredUsage() : null,
+  const [usageSnapshot, setUsageSnapshot] = useState<MonthlyUsageSnapshot | null>(() =>
+    typeof window !== 'undefined' ? loadStoredUsage() : null,
   );
+  const [usageAuth, setUsageAuth] = useState<UsageAuthSnapshot>({ signedIn: false, email: null });
   const activityClassifierRef = useRef(new ActivityClassifier());
   const audioServiceRef = useRef(new AudioService(defaultSoundRegistry));
   const notificationServiceRef = useRef(new DesktopNotificationService());
@@ -687,13 +701,6 @@ export function App() {
       }
       activeProcessIdsRef.current.set(sessionId, processId);
       terminalReplayStore.append(sessionId, data);
-      if (usageTrackerEnabled) {
-        const usage = parseClaudeUsageOutput(data);
-        if (usage) {
-          setUsageSnapshot(usage);
-          window.localStorage.setItem(usageStorageKey, JSON.stringify(usage));
-        }
-      }
 
       const activity = activityClassifierRef.current.recordOutput(sessionId, data);
       updateRuntime(sessionId, {
@@ -902,6 +909,87 @@ export function App() {
     focusSessionSearch,
     settingsSection,
   ]);
+
+  const refreshUsage = useCallback(async () => {
+    const result = await invokeCommand(
+      () => bridge.getUsage(),
+      'Unable to load usage from AI Sentinel.',
+    );
+    if (!result.ok) {
+      addPreferenceDiagnostic('usage', 'Usage', result.error);
+      return;
+    }
+
+    const snapshot: MonthlyUsageSnapshot = {
+      amountUsd: result.amountUsd,
+      limitUsd: result.limitUsd,
+      observedAt: result.observedAt,
+    };
+    setUsageSnapshot(snapshot);
+    try {
+      window.localStorage.setItem(usageStorageKey, JSON.stringify(snapshot));
+    } catch {
+      // A failed cache write is non-fatal; the live value is already displayed.
+    }
+  }, [addPreferenceDiagnostic, bridge]);
+
+  const signInUsage = useCallback(async () => {
+    try {
+      const result = await bridge.signInUsage();
+      if (!result.ok) {
+        if (!result.cancelled) {
+          addPreferenceDiagnostic('usage-auth', 'Usage sign-in', result.error);
+        }
+        return;
+      }
+      setUsageAuth({ signedIn: true, email: result.email });
+    } catch (error) {
+      addPreferenceDiagnostic(
+        'usage-auth',
+        'Usage sign-in',
+        error instanceof Error ? error.message : 'Unable to sign in to AI Sentinel.',
+      );
+    }
+  }, [addPreferenceDiagnostic, bridge]);
+
+  const signOutUsage = useCallback(async () => {
+    await invokeCommand(() => bridge.signOutUsage(), 'Unable to sign out of AI Sentinel.');
+    setUsageAuth({ signedIn: false, email: null });
+    setUsageSnapshot(null);
+    try {
+      window.localStorage.removeItem(usageStorageKey);
+    } catch {
+      // Ignore cache-clear failures; the in-memory value is already cleared.
+    }
+  }, [bridge]);
+
+  useEffect(() => {
+    if (!appStateLoaded) {
+      return;
+    }
+
+    void bridge
+      .getUsageAuth()
+      .then((snapshot) => setUsageAuth(snapshot))
+      .catch(() => undefined);
+  }, [appStateLoaded, bridge]);
+
+  useEffect(() => {
+    if (!appStateLoaded || !usageAuth.signedIn) {
+      return undefined;
+    }
+
+    const initialTimeout = window.setTimeout(() => {
+      void refreshUsage();
+    }, 0);
+    const interval = window.setInterval(() => {
+      void refreshUsage();
+    }, usageRefreshIntervalMs);
+    return () => {
+      window.clearTimeout(initialTimeout);
+      window.clearInterval(interval);
+    };
+  }, [appStateLoaded, usageAuth.signedIn, refreshUsage]);
 
   const focusedSession = useMemo(
     () =>
@@ -1807,7 +1895,11 @@ export function App() {
         appVersion={appState.appVersion}
         auth={appState.auth}
         usage={usageSnapshot}
-        usageEnabled={usageTrackerEnabled}
+        usageEnabled={usageAuth.signedIn}
+        usageUrl={usageUrl}
+        onOpenUsage={() => {
+          void bridge.openExternalUrl({ url: usageUrl });
+        }}
         sessions={appState.sessions}
         audio={appState.settings.audio}
         focusMode={focusMode}
@@ -1898,6 +1990,13 @@ export function App() {
         }}
         onUpdateNotificationPreferences={(preferences) => {
           void updateNotificationPreferences(preferences);
+        }}
+        usageAuth={usageAuth}
+        onSignInUsage={() => {
+          void signInUsage();
+        }}
+        onSignOutUsage={() => {
+          void signOutUsage();
         }}
         onUpdateSessionConfiguration={(configuration) => {
           void updateSessionConfiguration(configuration);

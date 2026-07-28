@@ -221,6 +221,35 @@ export interface NotificationPreferences {
   cooldownMs: number;
 }
 
+export interface UsageAuthSnapshot {
+  signedIn: boolean;
+  email: string | null;
+}
+
+export type UsageSignInResult =
+  | {
+      ok: true;
+      email: string | null;
+    }
+  | {
+      ok: false;
+      error: string;
+      cancelled?: boolean;
+    };
+
+export type MonthlyUsageResult =
+  | {
+      ok: true;
+      amountUsd: number;
+      limitUsd: number | null;
+      month: string;
+      observedAt: string;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 export interface ApplicationSettings {
   schemaVersion: number;
   shellKind: ShellKind;

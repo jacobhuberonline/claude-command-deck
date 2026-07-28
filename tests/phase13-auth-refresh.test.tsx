@@ -311,7 +311,12 @@ function createMockBridge(
     ),
     removeSession: vi.fn(() => Promise.resolve({ ok: true as const })),
     openDirectory: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
+    openExternalUrl: vi.fn(() => Promise.resolve({ ok: true as const })),
     openLogDirectory: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
+    getUsage: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
+    getUsageAuth: vi.fn(() => Promise.resolve({ signedIn: false, email: null })),
+    signInUsage: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
+    signOutUsage: vi.fn(() => Promise.resolve({ ok: true as const })),
     selectDirectory: vi.fn(() =>
       Promise.resolve({
         ok: false as const,

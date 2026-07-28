@@ -5,6 +5,7 @@ import type {
   AudioPreferences,
   ClaudeDiscoverySnapshot,
   ManagedProcessSnapshot,
+  MonthlyUsageResult,
   NotificationPreferences,
   SessionAudioPreferences,
   SessionConfiguration,
@@ -12,6 +13,8 @@ import type {
   SessionLaunchMode,
   ShellKind,
   ShellOption,
+  UsageAuthSnapshot,
+  UsageSignInResult,
 } from '../domain/types';
 
 export type AppShortcut = 'openSessionSwitcher' | 'addSession';
@@ -22,6 +25,10 @@ export interface AppShortcutEvent {
 
 export interface OpenDirectoryRequest {
   sessionId: SessionId;
+}
+
+export interface OpenExternalUrlRequest {
+  url: string;
 }
 
 export interface SelectDirectoryRequest {
@@ -247,7 +254,12 @@ export interface CommandDeckBridge {
   addSession: () => Promise<AddSessionResult>;
   removeSession: (request: RemoveSessionRequest) => Promise<CommandResult>;
   openDirectory: (request: OpenDirectoryRequest) => Promise<CommandResult>;
+  openExternalUrl: (request: OpenExternalUrlRequest) => Promise<CommandResult>;
   openLogDirectory: () => Promise<CommandResult>;
+  getUsage: () => Promise<MonthlyUsageResult>;
+  getUsageAuth: () => Promise<UsageAuthSnapshot>;
+  signInUsage: () => Promise<UsageSignInResult>;
+  signOutUsage: () => Promise<CommandResult>;
   selectDirectory: (request: SelectDirectoryRequest) => Promise<SelectDirectoryResult>;
   updateAuthConfiguration: (request: UpdateAuthConfigurationRequest) => Promise<CommandResult>;
   updateShellConfiguration: (request: UpdateShellConfigurationRequest) => Promise<CommandResult>;

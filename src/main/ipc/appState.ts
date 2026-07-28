@@ -2,6 +2,11 @@ import { existsSync } from 'node:fs';
 import { dialog, ipcMain, shell } from 'electron';
 import { createAppStateFromSettings } from '../../shared/domain/defaults';
 import { MAX_SESSION_COUNT } from '../../shared/domain/types';
+import type {
+  MonthlyUsageResult,
+  UsageAuthSnapshot,
+  UsageSignInResult,
+} from '../../shared/domain/types';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import type {
   AddSessionResult,
@@ -10,6 +15,7 @@ import type {
 } from '../../shared/ipc/contracts';
 import {
   openExternalDirectoryRequestSchema,
+  openExternalUrlRequestSchema,
   removeSessionRequestSchema,
   selectDirectoryRequestSchema,
   updateAuthConfigurationRequestSchema,
@@ -25,12 +31,17 @@ import {
 import type { SettingsStore } from '../persistence/SettingsStore';
 import type { SafeLogger } from '../logging/SafeLogger';
 import type { ProcessManager } from '../processes/ProcessManager';
+import type { UsageService } from '../usage/UsageService';
+import type { EntraAuthService } from '../usage/EntraAuthService';
+import { isSafeExternalUrl } from '../windows/NavigationPolicy';
 
 export function registerAppStateHandlers(
   appVersion: string,
   settingsStore: SettingsStore,
   logger: SafeLogger,
   processManager: ProcessManager,
+  usageService: UsageService,
+  usageAuthService: EntraAuthService,
 ): void {
   ipcMain.handle(IPC_CHANNELS.appGetState, () =>
     createAppStateFromSettings(appVersion, settingsStore.load()),
@@ -102,9 +113,52 @@ export function registerAppStateHandlers(
     },
   );
 
+  ipcMain.handle(
+    IPC_CHANNELS.appOpenExternalUrl,
+    async (_event, rawPayload): Promise<CommandResult> => {
+      const payload = openExternalUrlRequestSchema.safeParse(rawPayload);
+      if (!payload.success) {
+        return { ok: false, error: 'Invalid external URL request.' };
+      }
+
+      if (!isSafeExternalUrl(payload.data.url)) {
+        return { ok: false, error: 'Only http and https links can be opened.' };
+      }
+
+      await shell.openExternal(payload.data.url);
+      return { ok: true };
+    },
+  );
+
   ipcMain.handle(IPC_CHANNELS.appOpenLogDirectory, async (): Promise<CommandResult> => {
     const errorMessage = await shell.openPath(logger.getLogDirectory());
     return errorMessage ? { ok: false, error: errorMessage } : { ok: true };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.appGetUsage, (): Promise<MonthlyUsageResult> =>
+    usageService.getMonthlyUsage(),
+  );
+
+  ipcMain.handle(IPC_CHANNELS.appGetUsageAuth, (): UsageAuthSnapshot => {
+    const account = usageAuthService.getAccount();
+    return { signedIn: usageAuthService.isSignedIn(), email: account?.email || null };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.appSignInUsage, async (): Promise<UsageSignInResult> => {
+    try {
+      const account = await usageAuthService.signIn();
+      return { ok: true, email: account.email || null };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Microsoft sign-in failed.';
+      const cancelled = message.includes('closed before completing');
+      logger.warn('Usage sign-in failed', { cancelled, detail: message });
+      return { ok: false, error: message, cancelled };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.appSignOutUsage, (): CommandResult => {
+    usageAuthService.signOut();
+    return { ok: true };
   });
 
   ipcMain.handle(

@@ -2,6 +2,8 @@ import type { SafeLogger } from '../src/main/logging/SafeLogger';
 import { registerAppStateHandlers } from '../src/main/ipc/appState';
 import type { SettingsStore } from '../src/main/persistence/SettingsStore';
 import type { ProcessManager } from '../src/main/processes/ProcessManager';
+import type { UsageService } from '../src/main/usage/UsageService';
+import type { EntraAuthService } from '../src/main/usage/EntraAuthService';
 import {
   createDefaultSessionConfiguration,
   createDefaultSettings,
@@ -27,6 +29,7 @@ vi.mock('electron', () => ({
   },
   shell: {
     openPath: electronMocks.openPath,
+    openExternal: vi.fn(),
   },
 }));
 
@@ -50,11 +53,27 @@ describe('phase 5 app-state mutation regressions', () => {
     hasActiveProcess: vi.fn(() => false),
     processEpoch: vi.fn(() => 0),
   } as unknown as ProcessManager;
+  const usageService = {
+    getMonthlyUsage: vi.fn(() => Promise.resolve({ ok: false as const, error: 'Not available.' })),
+  } as unknown as UsageService;
+  const usageAuthService = {
+    getAccount: vi.fn(() => null),
+    isSignedIn: vi.fn(() => false),
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+  } as unknown as EntraAuthService;
 
   beforeEach(() => {
     electronMocks.handlers.clear();
     vi.clearAllMocks();
-    registerAppStateHandlers('0.1.0-test', settingsStore, logger, processManager);
+    registerAppStateHandlers(
+      '0.1.0-test',
+      settingsStore,
+      logger,
+      processManager,
+      usageService,
+      usageAuthService,
+    );
   });
 
   it('rejects a configuration update for an unknown session', async () => {

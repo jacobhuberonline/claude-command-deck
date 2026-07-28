@@ -13,6 +13,8 @@ import {
 import { SafeLogger } from './logging/SafeLogger';
 import { SettingsStore } from './persistence/SettingsStore';
 import { ProcessManager } from './processes/ProcessManager';
+import { EntraAuthService } from './usage/EntraAuthService';
+import { UsageService } from './usage/UsageService';
 import { createMainWindow } from './windows/mainWindow';
 
 let processManager: ProcessManager | null = null;
@@ -62,7 +64,16 @@ async function bootstrap(): Promise<void> {
       }),
     onState: (sessionId, snapshot) => broadcastTerminalState({ sessionId, snapshot }),
   });
-  registerAppStateHandlers(app.getVersion(), settingsStore, logger, processManager);
+  const usageAuthService = new EntraAuthService(logger);
+  const usageService = new UsageService(usageAuthService, logger);
+  registerAppStateHandlers(
+    app.getVersion(),
+    settingsStore,
+    logger,
+    processManager,
+    usageService,
+    usageAuthService,
+  );
   registerAuthHandlers(authService);
   registerClaudeHandlers();
   registerTerminalHandlers(processManager, settingsStore);

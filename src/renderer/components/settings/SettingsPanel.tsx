@@ -13,6 +13,7 @@ import type {
   ShellKind,
   ShellOption,
   SettingsSection,
+  UsageAuthSnapshot,
 } from '../../../shared/domain/types';
 import { buildSanitizedDiagnosticsReport } from '../../services/diagnostics/DiagnosticsReport';
 
@@ -27,6 +28,9 @@ interface SettingsPanelProps {
   onUpdateShellConfiguration: (shellKind: ShellKind) => void;
   onUpdateAudioPreferences: (preferences: AudioPreferences) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
+  usageAuth: UsageAuthSnapshot;
+  onSignInUsage: () => void;
+  onSignOutUsage: () => void;
   onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
   onUpdateSessionAudioPreferences: (
     sessionId: SessionId,
@@ -60,6 +64,9 @@ export function SettingsPanel({
   onUpdateShellConfiguration,
   onUpdateAudioPreferences,
   onUpdateNotificationPreferences,
+  usageAuth,
+  onSignInUsage,
+  onSignOutUsage,
   onUpdateSessionConfiguration,
   onUpdateSessionAudioPreferences,
   onSelectDirectory,
@@ -116,6 +123,9 @@ export function SettingsPanel({
               onUpdateShellConfiguration={onUpdateShellConfiguration}
               onUpdateAudioPreferences={onUpdateAudioPreferences}
               onUpdateNotificationPreferences={onUpdateNotificationPreferences}
+              usageAuth={usageAuth}
+              onSignInUsage={onSignInUsage}
+              onSignOutUsage={onSignOutUsage}
               onUpdateSessionConfiguration={onUpdateSessionConfiguration}
               onUpdateSessionAudioPreferences={onUpdateSessionAudioPreferences}
               onSelectDirectory={onSelectDirectory}
@@ -139,6 +149,9 @@ function SettingsSectionContent({
   shellOptions,
   onUpdateShellConfiguration,
   onUpdateNotificationPreferences,
+  usageAuth,
+  onSignInUsage,
+  onSignOutUsage,
   onUpdateSessionConfiguration,
   onUpdateSessionAudioPreferences,
   onSelectDirectory,
@@ -154,6 +167,9 @@ function SettingsSectionContent({
   shellOptions: ShellOption[];
   onUpdateShellConfiguration: (shellKind: ShellKind) => void;
   onUpdateNotificationPreferences: (preferences: NotificationPreferences) => void;
+  usageAuth: UsageAuthSnapshot;
+  onSignInUsage: () => void;
+  onSignOutUsage: () => void;
   onUpdateSessionConfiguration: (configuration: SessionConfiguration) => void;
   onUpdateSessionAudioPreferences: (
     sessionId: SessionId,
@@ -165,7 +181,14 @@ function SettingsSectionContent({
   onOpenLogDirectory: () => void;
 }) {
   if (section === 'general') {
-    return <GeneralSettings appState={appState} />;
+    return (
+      <GeneralSettings
+        appState={appState}
+        usageAuth={usageAuth}
+        onSignInUsage={onSignInUsage}
+        onSignOutUsage={onSignOutUsage}
+      />
+    );
   }
 
   if (section === 'claude') {
@@ -255,7 +278,17 @@ function SettingsSectionContent({
   );
 }
 
-function GeneralSettings({ appState }: { appState: AppStateSnapshot }) {
+function GeneralSettings({
+  appState,
+  usageAuth,
+  onSignInUsage,
+  onSignOutUsage,
+}: {
+  appState: AppStateSnapshot;
+  usageAuth: UsageAuthSnapshot;
+  onSignInUsage: () => void;
+  onSignOutUsage: () => void;
+}) {
   return (
     <>
       <h3>Session management</h3>
@@ -267,6 +300,21 @@ function GeneralSettings({ appState }: { appState: AppStateSnapshot }) {
         label="Terminal transcripts"
         value="Buffered in memory for switching; never persisted"
       />
+      <h3>AI Sentinel usage</h3>
+      <div className="settings-field">
+        <span>{usageAuth.signedIn ? (usageAuth.email ?? 'Signed in') : 'Not signed in'}</span>
+        <button
+          className="control-button"
+          type="button"
+          onClick={usageAuth.signedIn ? onSignOutUsage : onSignInUsage}
+        >
+          {usageAuth.signedIn ? 'Sign out' : 'Sign in with Microsoft'}
+        </button>
+      </div>
+      <p className="settings-hint">
+        Sign in with your symplr Microsoft account to show this month&apos;s AI Sentinel usage in
+        the toolbar. Click the usage tile to open your full usage report.
+      </p>
     </>
   );
 }
