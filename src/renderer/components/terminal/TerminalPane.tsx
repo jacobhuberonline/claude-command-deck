@@ -8,6 +8,10 @@ import type { SessionSnapshot } from '../../../shared/domain/types';
 import type { TerminalBridge } from '../../../shared/ipc/contracts';
 import { recordTerminalSize } from '../../services/terminal/TerminalSizeRegistry';
 import { recoverTerminalFocusAfterFullscreenExit } from '../../services/terminal/TerminalInputFocusRecovery';
+import {
+  handleTerminalCopyShortcut,
+  isMacTerminalPlatform,
+} from '../../services/terminal/TerminalKeyboardShortcuts';
 import type { TerminalReplayStore } from '../../services/terminal/TerminalReplayStore';
 
 interface TerminalPaneProps {
@@ -154,7 +158,12 @@ export function TerminalPane({
     if (replay) {
       terminal.write(replay);
     }
+    const isMacPlatform = isMacTerminalPlatform(navigator.platform);
     terminal.attachCustomKeyEventHandler((event) => {
+      if (!handleTerminalCopyShortcut(event, isMacPlatform, terminal, navigator.clipboard)) {
+        return false;
+      }
+
       if (event.type !== 'keydown' || (!event.ctrlKey && !event.metaKey)) {
         return true;
       }
