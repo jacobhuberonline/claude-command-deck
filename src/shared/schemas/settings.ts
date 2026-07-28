@@ -33,6 +33,7 @@ export const sessionConfigurationSchema = z.object({
 
 export const authConfigurationSchema = z.object({
   provider: z.enum(['aws', 'custom', 'disabled']),
+  awsProfile: z.string().trim().max(512).default(''),
   checkExecutable: z.string().max(512),
   checkArgs: z.array(z.string().max(2048)).max(64),
   refreshExecutable: z.string().max(512),

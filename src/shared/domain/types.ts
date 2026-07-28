@@ -134,6 +134,7 @@ export interface ManagedProcessSnapshot {
 
 export interface AuthConfiguration {
   provider: AuthProvider;
+  awsProfile: string;
   checkExecutable: string;
   checkArgs: string[];
   refreshExecutable: string;

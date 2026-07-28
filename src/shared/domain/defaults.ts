@@ -59,6 +59,7 @@ export const defaultNotificationPreferences: NotificationPreferences = {
 
 export const defaultAuthConfiguration: AuthConfiguration = {
   provider: 'disabled',
+  awsProfile: '',
   checkExecutable: '',
   checkArgs: [],
   refreshExecutable: '',
@@ -71,6 +72,34 @@ export const defaultAuthConfiguration: AuthConfiguration = {
   startupChecksEnabled: false,
   nativeNotificationsEnabled: true,
 };
+
+const AWS_CHECK_ARGS = ['sts', 'get-caller-identity', '--output', 'json'];
+const AWS_REFRESH_ARGS = ['sso', 'login'];
+
+// The AWS provider hides its command plumbing: only the profile and check interval are
+// user-adjustable. Everything else is derived here so every reader sees a consistent command.
+export function normalizeAuthConfiguration(auth: AuthConfiguration): AuthConfiguration {
+  return auth.provider === 'aws' ? applyAwsPreset(auth) : auth;
+}
+
+export function applyAwsPreset(auth: AuthConfiguration): AuthConfiguration {
+  const profile = auth.awsProfile.trim();
+  const profileArgs = profile ? ['--profile', profile] : [];
+
+  return {
+    ...auth,
+    awsProfile: profile,
+    checkExecutable: 'aws',
+    checkArgs: [...AWS_CHECK_ARGS, ...profileArgs],
+    refreshExecutable: 'aws',
+    refreshArgs: [...AWS_REFRESH_ARGS, ...profileArgs],
+    workingDirectory: '',
+    shellMode: false,
+    checkTimeoutSeconds: defaultAuthConfiguration.checkTimeoutSeconds,
+    expirationWarningMinutes: defaultAuthConfiguration.expirationWarningMinutes,
+    startupChecksEnabled: true,
+  };
+}
 
 export function createDefaultSessionConfiguration(
   id: SessionId,
@@ -242,10 +271,10 @@ export function normalizeApplicationSettings(settings: ApplicationSettings): App
         ...settings.audio.quietHours,
       },
     },
-    auth: {
+    auth: normalizeAuthConfiguration({
       ...defaults.auth,
       ...settings.auth,
-    },
+    }),
     notifications: {
       ...defaults.notifications,
       ...settings.notifications,

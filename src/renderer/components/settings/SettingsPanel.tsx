@@ -15,6 +15,7 @@ import type {
   SettingsSection,
   UsageAuthSnapshot,
 } from '../../../shared/domain/types';
+import { applyAwsPreset } from '../../../shared/domain/defaults';
 import { buildSanitizedDiagnosticsReport } from '../../services/diagnostics/DiagnosticsReport';
 
 interface SettingsPanelProps {
@@ -486,15 +487,7 @@ function AuthenticationSettings({
   const update = (patch: Partial<AuthConfiguration>) => onUpdate({ ...auth, ...patch });
   const selectProvider = (provider: AuthProvider) => {
     if (provider === 'aws') {
-      onUpdate({
-        ...auth,
-        provider,
-        checkExecutable: auth.checkExecutable.trim() || 'aws',
-        checkArgs:
-          auth.checkArgs.length > 0
-            ? auth.checkArgs
-            : ['sts', 'get-caller-identity', '--output', 'json'],
-      });
+      onUpdate(applyAwsPreset({ ...auth, provider }));
       return;
     }
 
@@ -524,62 +517,87 @@ function AuthenticationSettings({
           <option value="disabled">Disabled</option>
         </select>
       </label>
-      <TextField
-        label="Check executable"
-        value={auth.checkExecutable}
-        placeholder="aws"
-        onChange={(value) => update({ checkExecutable: value })}
-      />
-      <ArgsField
-        label="Check arguments"
-        value={auth.checkArgs}
-        placeholder={'sts\nget-caller-identity\n--output\njson'}
-        onChange={(value) => update({ checkArgs: value })}
-      />
-      <TextField
-        label="Login executable"
-        value={auth.refreshExecutable}
-        placeholder="aws"
-        onChange={(value) => update({ refreshExecutable: value })}
-      />
-      <ArgsField
-        label="Login arguments"
-        value={auth.refreshArgs}
-        placeholder={'sso\nlogin'}
-        onChange={(value) => update({ refreshArgs: value })}
-      />
-      <TextField
-        label="Working directory"
-        value={auth.workingDirectory}
-        placeholder="Leave blank to use the app directory"
-        onChange={(value) => update({ workingDirectory: value })}
-      />
-      <ToggleField
-        label="Shell mode"
-        enabled={auth.shellMode}
-        onToggle={() => update({ shellMode: !auth.shellMode })}
-      />
-      <NumberField
-        label="Check interval"
-        value={auth.checkIntervalSeconds}
-        min={30}
-        max={86400}
-        suffix="s"
-        onChange={(value) => update({ checkIntervalSeconds: value })}
-      />
-      <NumberField
-        label="Check timeout"
-        value={auth.checkTimeoutSeconds}
-        min={1}
-        max={600}
-        suffix="s"
-        onChange={(value) => update({ checkTimeoutSeconds: value })}
-      />
-      <ToggleField
-        label="Check once at app start"
-        enabled={auth.startupChecksEnabled}
-        onToggle={() => update({ startupChecksEnabled: !auth.startupChecksEnabled })}
-      />
+      {auth.provider === 'aws' ? (
+        <>
+          <TextField
+            label="AWS profile"
+            value={auth.awsProfile}
+            placeholder="Leave blank for the default profile"
+            onChange={(value) => onUpdate(applyAwsPreset({ ...auth, awsProfile: value }))}
+          />
+          <p className="settings-hint">
+            Passed as <code>--profile</code> to <code>aws sts get-caller-identity</code> and{' '}
+            <code>aws sso login</code>. Set it to the profile name you use to sign in.
+          </p>
+          <NumberField
+            label="Check interval"
+            value={auth.checkIntervalSeconds}
+            min={30}
+            max={86400}
+            suffix="s"
+            onChange={(value) => update({ checkIntervalSeconds: value })}
+          />
+        </>
+      ) : auth.provider === 'custom' ? (
+        <>
+          <TextField
+            label="Check executable"
+            value={auth.checkExecutable}
+            placeholder="aws"
+            onChange={(value) => update({ checkExecutable: value })}
+          />
+          <ArgsField
+            label="Check arguments"
+            value={auth.checkArgs}
+            placeholder={'sts\nget-caller-identity\n--output\njson'}
+            onChange={(value) => update({ checkArgs: value })}
+          />
+          <TextField
+            label="Login executable"
+            value={auth.refreshExecutable}
+            placeholder="aws"
+            onChange={(value) => update({ refreshExecutable: value })}
+          />
+          <ArgsField
+            label="Login arguments"
+            value={auth.refreshArgs}
+            placeholder={'sso\nlogin'}
+            onChange={(value) => update({ refreshArgs: value })}
+          />
+          <TextField
+            label="Working directory"
+            value={auth.workingDirectory}
+            placeholder="Leave blank to use the app directory"
+            onChange={(value) => update({ workingDirectory: value })}
+          />
+          <ToggleField
+            label="Shell mode"
+            enabled={auth.shellMode}
+            onToggle={() => update({ shellMode: !auth.shellMode })}
+          />
+          <NumberField
+            label="Check interval"
+            value={auth.checkIntervalSeconds}
+            min={30}
+            max={86400}
+            suffix="s"
+            onChange={(value) => update({ checkIntervalSeconds: value })}
+          />
+          <NumberField
+            label="Check timeout"
+            value={auth.checkTimeoutSeconds}
+            min={1}
+            max={600}
+            suffix="s"
+            onChange={(value) => update({ checkTimeoutSeconds: value })}
+          />
+          <ToggleField
+            label="Check once at app start"
+            enabled={auth.startupChecksEnabled}
+            onToggle={() => update({ startupChecksEnabled: !auth.startupChecksEnabled })}
+          />
+        </>
+      ) : null}
     </>
   );
 }

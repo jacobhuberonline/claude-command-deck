@@ -234,6 +234,7 @@ describe('authentication service check freshness', () => {
 function createAuthConfiguration(checkExecutable: string): AuthConfiguration {
   return {
     provider: 'custom',
+    awsProfile: '',
     checkExecutable,
     checkArgs: [],
     refreshExecutable: '',
