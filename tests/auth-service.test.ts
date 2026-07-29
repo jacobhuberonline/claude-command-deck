@@ -7,14 +7,18 @@ import type { AuthConfiguration } from '../src/shared/domain/types';
 
 const processMocks = vi.hoisted(() => ({
   spawn: vi.fn(),
+  // resolveCommand uses spawnSync; return "not found" so the executable is used as-is.
+  spawnSync: vi.fn(() => ({ status: 1, stdout: '' })),
   ptySpawn: vi.fn(),
 }));
 
 vi.mock('node:child_process', () => ({
   default: {
     spawn: processMocks.spawn,
+    spawnSync: processMocks.spawnSync,
   },
   spawn: processMocks.spawn,
+  spawnSync: processMocks.spawnSync,
 }));
 
 vi.mock('node-pty', () => ({
@@ -204,6 +208,64 @@ describe('authentication service check freshness', () => {
 
     await expect(service.check()).resolves.toMatchObject({ status: 'refreshing' });
     expect(processMocks.spawn).not.toHaveBeenCalled();
+  });
+
+  it('resolves a bare executable to its full path before spawning the refresh', () => {
+    const auth = createAuthConfiguration('aws');
+    auth.provider = 'aws';
+    auth.refreshExecutable = 'aws';
+    auth.refreshArgs = ['sso', 'login'];
+    processMocks.spawnSync.mockReturnValueOnce({
+      status: 0,
+      stdout: 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe\r\n',
+    });
+    const settingsStore = {
+      load: vi.fn(() => ({ auth })),
+    } as unknown as SettingsStore;
+    processMocks.ptySpawn.mockReturnValue(new FakeRefreshProcess());
+    const service = new AuthService(settingsStore, createLogger(), {
+      onOutput: vi.fn(),
+      onExit: vi.fn(),
+    });
+
+    expect(service.startRefresh()).toEqual({ ok: true });
+    expect(processMocks.ptySpawn.mock.calls[0]?.[0]).toBe(
+      'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe',
+    );
+  });
+
+  it('falls back to AWS_PROFILE when no profile is configured for the refresh', () => {
+    const previous = process.env.AWS_PROFILE;
+    process.env.AWS_PROFILE = 'env-profile';
+    try {
+      const auth = createAuthConfiguration('aws');
+      auth.provider = 'aws';
+      auth.awsProfile = '';
+      auth.refreshExecutable = 'aws';
+      auth.refreshArgs = ['sso', 'login'];
+      const settingsStore = {
+        load: vi.fn(() => ({ auth })),
+      } as unknown as SettingsStore;
+      processMocks.ptySpawn.mockReturnValue(new FakeRefreshProcess());
+      const service = new AuthService(settingsStore, createLogger(), {
+        onOutput: vi.fn(),
+        onExit: vi.fn(),
+      });
+
+      expect(service.startRefresh()).toEqual({ ok: true });
+      expect(processMocks.ptySpawn.mock.calls[0]?.[1]).toEqual([
+        'sso',
+        'login',
+        '--profile',
+        'env-profile',
+      ]);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AWS_PROFILE;
+      } else {
+        process.env.AWS_PROFILE = previous;
+      }
+    }
   });
 
   it('does not report an invalid AWS identity response as connected', async () => {

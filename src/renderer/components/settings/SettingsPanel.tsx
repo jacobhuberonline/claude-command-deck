@@ -527,7 +527,8 @@ function AuthenticationSettings({
           />
           <p className="settings-hint">
             Passed as <code>--profile</code> to <code>aws sts get-caller-identity</code> and{' '}
-            <code>aws sso login</code>. Set it to the profile name you use to sign in.
+            <code>aws sso login</code>. Leave blank to use the <code>AWS_PROFILE</code> environment
+            variable.
           </p>
           <NumberField
             label="Check interval"

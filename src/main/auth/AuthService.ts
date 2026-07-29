@@ -8,6 +8,7 @@ import type {
 } from '../../shared/ipc/contracts';
 import type { SafeLogger } from '../logging/SafeLogger';
 import type { SettingsStore } from '../persistence/SettingsStore';
+import { resolveCommand } from '../processes/CommandResolution';
 import { parseAwsCallerIdentity } from './AuthParsers';
 
 interface AuthServiceEvents {
@@ -65,7 +66,9 @@ export class AuthService {
     }
 
     try {
-      const command = buildShellCommand(auth.refreshExecutable, auth.refreshArgs, auth.shellMode);
+      const executable = resolveExecutable(auth.refreshExecutable);
+      const args = withAwsProfileFallback(auth, auth.refreshArgs);
+      const command = buildShellCommand(executable, args, auth.shellMode);
       this.refreshProcess = pty.spawn(command.executable, command.args, {
         name: 'xterm-256color',
         cols: 100,
@@ -214,7 +217,9 @@ export class AuthService {
         resolve(result);
       };
 
-      const command = buildShellCommand(auth.checkExecutable, auth.checkArgs, auth.shellMode);
+      const executable = resolveExecutable(auth.checkExecutable);
+      const args = withAwsProfileFallback(auth, auth.checkArgs);
+      const command = buildShellCommand(executable, args, auth.shellMode);
       let child: ReturnType<typeof spawn>;
       try {
         child = spawn(command.executable, command.args, {
@@ -342,6 +347,35 @@ function authCheckConfigurationKey(auth: AuthConfiguration): string {
     shellMode: auth.shellMode,
     checkTimeoutSeconds: auth.checkTimeoutSeconds,
   });
+}
+
+// node-pty and shell:false spawn do not perform Windows PATH/PATHEXT resolution, so a bare
+// "aws" fails with "File not found". Resolve to the full path when the command is unqualified.
+function resolveExecutable(executable: string): string {
+  const trimmed = executable.trim();
+  if (!trimmed || /[\\/]/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return resolveCommand(trimmed) ?? trimmed;
+}
+
+// When the AWS provider has no explicit profile, fall back to the AWS_PROFILE environment
+// variable so login targets the same profile the user's shell uses.
+function withAwsProfileFallback(
+  auth: AuthConfiguration,
+  args: string[],
+): string[] {
+  if (auth.provider !== 'aws' || auth.awsProfile.trim()) {
+    return args;
+  }
+
+  const envProfile = process.env.AWS_PROFILE?.trim();
+  if (!envProfile || args.includes('--profile') || args.some((arg) => arg.startsWith('--profile='))) {
+    return args;
+  }
+
+  return [...args, '--profile', envProfile];
 }
 
 function buildShellCommand(executable: string, args: string[], shellMode: boolean) {
