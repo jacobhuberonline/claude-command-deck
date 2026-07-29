@@ -1,0 +1,130 @@
+name: Unsigned Windows Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      unsigned_acknowledgement:
+        description: 'Type exactly: UNSIGNED INTERNAL TEST ONLY'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unsigned-windows-candidate
+  cancel-in-progress: false
+
+jobs:
+  unsigned-windows:
+    name: Build unsigned internal candidate
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Require explicit unsigned-build acknowledgement
+        shell: pwsh
+        env:
+          ACKNOWLEDGEMENT: ${{ inputs.unsigned_acknowledgement }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if ($env:REF_TYPE -ne "branch" -or $env:REF_NAME -ne "main") {
+            throw "Unsigned candidates must be built from the main branch."
+          }
+
+          if ($env:ACKNOWLEDGEMENT -cne "UNSIGNED INTERNAL TEST ONLY") {
+            throw "Unsigned build acknowledgement did not match the required phrase."
+          }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Verify package versions
+        shell: pwsh
+        run: |
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $packageLock = Get-Content package-lock.json -Raw | ConvertFrom-Json
+
+          if ($packageLock.version -ne $packageVersion -or $packageLock.packages."".version -ne $packageVersion) {
+            throw "package.json and package-lock.json versions must match."
+          }
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Build application
+        run: npm run build
+
+      - name: Package explicitly unsigned installer
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_KEY_PASSWORD: ''
+          CSC_LINK: ''
+          WIN_CSC_KEY_PASSWORD: ''
+          WIN_CSC_LINK: ''
+        run: |
+          npm run package:win
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unsigned Windows installer packaging failed."
+          }
+
+      - name: Verify and stage unsigned candidate
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem release -File -Filter "Claude-Command-Deck-Setup-*.exe")
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one installer, found $($installers.Count)."
+          }
+
+          $installer = $installers[0]
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer.FullName
+          if ($signature.Status -ne "NotSigned") {
+            throw "Internal candidate was expected to be unsigned. Status: $($signature.Status)."
+          }
+
+          New-Item -ItemType Directory -Path staged-release-assets | Out-Null
+          Copy-Item -LiteralPath $installer.FullName -Destination staged-release-assets
+
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content "staged-release-assets/$($installer.Name).sha256" `
+            -Value "$hash  $($installer.Name)" -Encoding ascii -NoNewline
+          Set-Content "staged-release-assets/UNSIGNED-INTERNAL-TEST-ONLY.txt" `
+            -Value "This installer is unsigned and is not approved for public release." `
+            -Encoding ascii
+
+          "WARNING: This candidate is unsigned and must not be published as a GitHub Release." >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload unsigned candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: claude-command-deck-windows-${{ github.run_id }}-UNSIGNED
+          path: staged-release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

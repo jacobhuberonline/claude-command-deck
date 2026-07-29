@@ -20,7 +20,7 @@
     "postinstall": "node scripts/ensure-node-pty-helper.mjs && node scripts/ensure-electron.mjs",
     "generate:sounds": "tsx scripts/generate-sounds.ts",
     "package:dir": "electron-builder --dir",
-    "package:win": "electron-builder --win",
+    "package:win": "electron-builder --win --publish never",
     "package:win:dir": "electron-builder --win --dir"
   },
   "build": {
@@ -41,8 +41,14 @@
       "identity": null
     },
     "win": {
+      "artifactName": "Claude-Command-Deck-Setup-${version}.${ext}",
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {

@@ -2,6 +2,24 @@
 
 Local Electron desktop app for supervising many Claude Code sessions across different directories. It combines a searchable session navigator with one large real PTY, exact named-session resume when the installed CLI supports it, authentication checks, conservative activity labels, and configurable notifications.
 
+## Install
+
+Trusted Windows signing is currently deferred. The
+[GitHub Releases page](https://github.com/jacobhuberonline/claude-command-deck/releases) records
+source-only preview versions; no Windows installer is attached to a release while signing is
+unavailable.
+
+Windows x64 test installers are shared with selected testers as short-lived GitHub Actions
+artifacts. Every artifact ends in `-UNSIGNED` and includes a SHA-256 checksum plus an explicit
+warning. Windows will identify these builds as coming from an unknown publisher. Install one only
+when a maintainer has shared the exact Actions run and disclosed that warning. Because this
+repository is public, a shared link is not an access-control boundary.
+
+Claude Code must already be installed. Complete any required authentication through Claude Code or
+the configured credential flow. The optional credential monitor may require a separately installed
+provider CLI. Command Deck discovers and launches those existing tools; it does not bundle
+credentials or provider configuration.
+
 ## Session Workflow
 
 - Add a directory with the **Session** button or `Alt+N`.
