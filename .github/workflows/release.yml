@@ -53,9 +53,10 @@ jobs:
         shell: pwsh
         run: |
           $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $packageLock = Get-Content package-lock.json -Raw | ConvertFrom-Json
+          $packageLock = Get-Content package-lock.json -Raw | ConvertFrom-Json -AsHashtable
 
-          if ($packageLock.version -ne $packageVersion -or $packageLock.packages."".version -ne $packageVersion) {
+          if ($packageLock["version"] -ne $packageVersion -or
+              $packageLock["packages"][""]["version"] -ne $packageVersion) {
             throw "package.json and package-lock.json versions must match."
           }
 
