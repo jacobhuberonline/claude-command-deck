@@ -362,16 +362,17 @@ function resolveExecutable(executable: string): string {
 
 // When the AWS provider has no explicit profile, fall back to the AWS_PROFILE environment
 // variable so login targets the same profile the user's shell uses.
-function withAwsProfileFallback(
-  auth: AuthConfiguration,
-  args: string[],
-): string[] {
+function withAwsProfileFallback(auth: AuthConfiguration, args: string[]): string[] {
   if (auth.provider !== 'aws' || auth.awsProfile.trim()) {
     return args;
   }
 
   const envProfile = process.env.AWS_PROFILE?.trim();
-  if (!envProfile || args.includes('--profile') || args.some((arg) => arg.startsWith('--profile='))) {
+  if (
+    !envProfile ||
+    args.includes('--profile') ||
+    args.some((arg) => arg.startsWith('--profile='))
+  ) {
     return args;
   }
 
