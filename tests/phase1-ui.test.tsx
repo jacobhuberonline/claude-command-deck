@@ -118,6 +118,35 @@ describe('phase 1 visual shell', () => {
     expect(within(dialog).getByText('Schema v4')).toBeInTheDocument();
   });
 
+  it('keeps AI Sentinel usage in the command bar and signs in before opening it', async () => {
+    const snapshot = createPhaseOneState('test');
+    snapshot.settings.auth.startupChecksEnabled = false;
+    const bridge = createMockBridge(snapshot);
+    bridge.signInUsage = vi.fn(() =>
+      Promise.resolve({ ok: true as const, email: 'user@example.com' }),
+    );
+    window.commandDeck = bridge;
+
+    render(<App />);
+
+    const signInButton = await screen.findByRole('button', {
+      name: "Sign in to view this month's AI Sentinel usage",
+    });
+    fireEvent.click(signInButton);
+
+    await waitFor(() => expect(bridge.signInUsage).toHaveBeenCalledTimes(1));
+    expect(bridge.openExternalUrl).not.toHaveBeenCalled();
+
+    const openButton = await screen.findByRole('button', {
+      name: "Open this month's AI Sentinel usage",
+    });
+    fireEvent.click(openButton);
+
+    expect(bridge.openExternalUrl).toHaveBeenCalledWith({
+      url: 'https://ai-sentinel.symplr.com/my-usage',
+    });
+  });
+
   it('preserves AWS startup consent while editing the derived profile preset', async () => {
     const snapshot = createPhaseOneState('test');
     snapshot.settings.auth = {

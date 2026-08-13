@@ -1908,10 +1908,14 @@ export function App() {
         appVersion={appState.appVersion}
         auth={appState.auth}
         usage={usageSnapshot}
-        usageEnabled={usageAuth.signedIn}
+        usageSignedIn={usageAuth.signedIn}
         usageUrl={usageUrl}
-        onOpenUsage={() => {
-          void bridge.openExternalUrl({ url: usageUrl });
+        onUsageAction={() => {
+          if (usageAuth.signedIn) {
+            void bridge.openExternalUrl({ url: usageUrl });
+            return;
+          }
+          void signInUsage();
         }}
         sessions={appState.sessions}
         audio={appState.settings.audio}

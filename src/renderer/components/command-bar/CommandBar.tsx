@@ -20,9 +20,9 @@ interface CommandBarProps {
   appVersion: string;
   auth: AuthStateSnapshot;
   usage: MonthlyUsageSnapshot | null;
-  usageEnabled: boolean;
+  usageSignedIn: boolean;
   usageUrl: string;
-  onOpenUsage: () => void;
+  onUsageAction: () => void;
   sessions: SessionSnapshot[];
   audio: AudioPreferences;
   focusMode: boolean;
@@ -36,9 +36,9 @@ export function CommandBar({
   appVersion,
   auth,
   usage,
-  usageEnabled,
+  usageSignedIn,
   usageUrl,
-  onOpenUsage,
+  onUsageAction,
   sessions,
   audio,
   focusMode,
@@ -89,21 +89,26 @@ export function CommandBar({
             <span>Session</span>
           </button>
         ) : null}
-        {usageEnabled ? (
-          <button
-            className={`metric metric-link usage-pill metric-${usage ? usageTone(usage) : 'neutral'}`}
-            type="button"
-            title={
-              usage
+        <button
+          className={`metric metric-link usage-pill metric-${usage ? usageTone(usage) : 'neutral'}`}
+          type="button"
+          title={
+            !usageSignedIn
+              ? "Sign in with Microsoft to view this month's AI Sentinel usage."
+              : usage
                 ? `${usage.limitUsd !== null ? `Limit ${formatUsd(usage.limitUsd)}. ` : ''}Updated ${formatObservedAt(usage.observedAt)}. Open AI Sentinel for details.`
                 : `Open AI Sentinel (${usageUrl}) for your monthly usage.`
-            }
-            onClick={onOpenUsage}
-          >
-            <span>This month</span>
-            <strong>{usage ? formatUsd(usage.amountUsd) : '--'}</strong>
-          </button>
-        ) : null}
+          }
+          aria-label={
+            usageSignedIn
+              ? "Open this month's AI Sentinel usage"
+              : "Sign in to view this month's AI Sentinel usage"
+          }
+          onClick={onUsageAction}
+        >
+          <span>This month</span>
+          <strong>{usage ? formatUsd(usage.amountUsd) : '--'}</strong>
+        </button>
         <button
           className="icon-button"
           type="button"
