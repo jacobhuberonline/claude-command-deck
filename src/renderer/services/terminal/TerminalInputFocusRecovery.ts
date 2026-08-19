@@ -20,10 +20,7 @@ export function recoverTerminalFocusAfterFullscreenExit(
   // input/composition state. Reset only when the terminal already owns focus.
   terminal.blur();
   return scheduleFrame(() => {
-    if (
-      documentRef.hasFocus() &&
-      (documentRef.activeElement === documentRef.body || documentRef.activeElement === textarea)
-    ) {
+    if (documentRef.activeElement === documentRef.body || documentRef.activeElement === textarea) {
       terminal.focus();
     }
   });

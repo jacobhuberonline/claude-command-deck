@@ -77,6 +77,30 @@ describe('terminal input focus recovery', () => {
     expect(document.activeElement).toBe(button);
   });
 
+  it('restores terminal ownership when the window loses focus during recovery', () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const textarea = document.createElement('textarea');
+    document.body.append(textarea);
+    textarea.focus();
+
+    let scheduledCallback: FrameRequestCallback | undefined;
+    const terminal = {
+      textarea,
+      blur: vi.fn(() => textarea.blur()),
+      focus: vi.fn(() => textarea.focus()),
+    };
+
+    recoverTerminalFocusAfterFullscreenExit(terminal, document, (callback) => {
+      scheduledCallback = callback;
+      return 19;
+    });
+    hasFocus.mockReturnValue(false);
+    scheduledCallback?.(0);
+
+    expect(terminal.focus).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(textarea);
+  });
+
   it('does not refocus a background window', () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     const textarea = document.createElement('textarea');
