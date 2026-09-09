@@ -242,6 +242,11 @@ export function App() {
   const authCheckGenerationRef = useRef(0);
   const authCheckInFlightRef = useRef<Promise<AuthCheckResult> | null>(null);
   const authRefreshStartInFlightRef = useRef(false);
+  const sessionAuthFailureObservedRef = useRef(false);
+  const visibleSessionIdsRef = useRef<SessionId[]>([]);
+  const updateVisibleSessionIds = useCallback((sessionIds: SessionId[]) => {
+    visibleSessionIdsRef.current = sessionIds;
+  }, []);
   const appStateLoadedRef = useRef(false);
 
   const addPreferenceDiagnostic = useCallback((id: string, label: string, error: string) => {
@@ -701,6 +706,26 @@ export function App() {
         processId,
         ...activityPatch(activity),
       });
+      if (
+        activity.events.includes('session.authentication_may_be_required') &&
+        appStateRef.current.settings.auth.provider !== 'disabled'
+      ) {
+        const provider = appStateRef.current.settings.auth.provider;
+        sessionAuthFailureObservedRef.current = true;
+        authCheckGenerationRef.current += 1;
+        authCheckInFlightRef.current = null;
+        setAppState((current) => ({
+          ...current,
+          auth: {
+            ...current.auth,
+            status: 'disconnected',
+            label: `${authProviderName(provider)} rejected by Claude`,
+            details: `Claude reported an expired or invalid credential. Start the configured ${authProviderName(provider).toLowerCase()} login before retrying.`,
+            safeIdentity: undefined,
+            nextScheduledCheckAt: undefined,
+          },
+        }));
+      }
       emitSemanticEvents(activity.events, { sessionId });
       if (awaitingClaudeReadyRef.current.delete(sessionId)) {
         emitSemanticEvents(['session.ready'], { sessionId });
@@ -835,17 +860,21 @@ export function App() {
           target.tagName === 'TEXTAREA' ||
           target.isContentEditable === true);
 
-      if (isTyping) {
+      const isSessionSearch = isHtmlTarget && target.closest('.session-search') !== null;
+      const shortcutIndex = sessionShortcutIndex(event);
+      if (isTyping && !(isSessionSearch && shortcutIndex !== null)) {
         return;
       }
 
-      const shortcutIndex = sessionShortcutIndex(event);
       if (shortcutIndex !== null) {
         event.preventDefault();
-        const session = appState.sessions[shortcutIndex];
-        if (session) {
-          setFocusedSessionId(session.configuration.id);
+        const sessionId = visibleSessionIdsRef.current[shortcutIndex];
+        if (sessionId) {
+          setFocusedSessionId(sessionId);
+          setTerminalFocusRequest((current) => current + 1);
+          if (isSessionSearch) target.blur();
         }
+        return;
       }
 
       if (isAltShortcut(event, 'f', 'KeyF')) {
@@ -1584,7 +1613,16 @@ export function App() {
   }
 
   const checkConnection = useCallback(
-    (options: { forceFresh?: boolean } = {}): Promise<AuthCheckResult> => {
+    (
+      options: { forceFresh?: boolean; loginSucceeded?: boolean } = {},
+    ): Promise<AuthCheckResult> => {
+      if (sessionAuthFailureObservedRef.current && !options.forceFresh) {
+        return Promise.resolve({
+          status: 'disconnected',
+          checkedAt: new Date().toISOString(),
+          error: 'Claude reported an expired or invalid credential.',
+        });
+      }
       if (!options.forceFresh && authCheckInFlightRef.current) {
         return authCheckInFlightRef.current;
       }
@@ -1628,6 +1666,19 @@ export function App() {
           result = await runAuthCheck(bridge);
           if (generation !== authCheckGenerationRef.current) {
             return supersededAuthCheckResult(result);
+          }
+        }
+
+        if (result.status === 'connected' && sessionAuthFailureObservedRef.current) {
+          if (options.loginSucceeded) {
+            sessionAuthFailureObservedRef.current = false;
+          } else {
+            result = {
+              status: 'disconnected',
+              checkedAt: result.checkedAt,
+              error:
+                'Claude reported expired credentials. Complete credential login before retrying.',
+            };
           }
         }
 
@@ -1770,6 +1821,11 @@ export function App() {
       return;
     }
 
+    if (auth.provider === 'aws' || sessionAuthFailureObservedRef.current) {
+      await startAuthRefresh();
+      return;
+    }
+
     const result = await checkConnection();
     if (!shouldAuthCheckStartRefresh(result.status)) {
       return;
@@ -1885,11 +1941,13 @@ export function App() {
   }, [appState.settings.auth, checkConnection, startConfiguredAuthRefreshAfterCheck]);
 
   useEffect(() => {
-    return bridge.auth.onExit(() => {
+    return bridge.auth.onExit(({ exitCode, signal }) => {
       authRefreshStartInFlightRef.current = false;
-      // A login process exit does not establish credential state. Always run the configured
-      // authoritative check, including after cancellation or a non-zero exit.
-      void checkConnection({ forceFresh: true });
+      // A successful identity probe cannot clear Claude's rejection after a cancelled login.
+      void checkConnection({
+        forceFresh: true,
+        loginSucceeded: exitCode === 0 && signal === null,
+      });
     });
   }, [bridge, checkConnection]);
 
@@ -1940,6 +1998,7 @@ export function App() {
           focusedSessionId={focusedSession?.configuration.id ?? focusedSessionId}
           focusMode={focusMode}
           onFocusSession={setFocusedSessionId}
+          onVisibleSessionsChange={updateVisibleSessionIds}
           onRequestTerminalFocus={() => setTerminalFocusRequest((current) => current + 1)}
           onToggleFocusMode={() => setFocusMode((current) => !current)}
           onAddSession={() => {
@@ -2317,11 +2376,11 @@ function authProviderName(provider: AuthProvider) {
 
 function authScopeDisclaimer(provider: AuthProvider) {
   if (provider === 'aws') {
-    return 'This reports only the configured AWS check; it does not directly inspect running Claude sessions.';
+    return 'This verifies the configured AWS profile; credential errors reported by Claude override this status.';
   }
 
   if (provider === 'custom') {
-    return 'This reports only the configured custom check; it does not directly inspect running Claude sessions.';
+    return 'This verifies the configured custom check; credential errors reported by Claude override this status.';
   }
 
   return 'No credential check is inspecting running Claude sessions.';

@@ -136,8 +136,8 @@ export function CommandBar({
         <button
           className={`icon-button auth-status-icon auth-${auth.status}`}
           type="button"
-          title={`${auth.label}: ${auth.details}`}
-          aria-label={`Open credential monitor. ${auth.label}: ${auth.details}`}
+          title={`${auth.label}: ${auth.details}${auth.provider === 'aws' ? ' Click to refresh AWS credentials.' : ''}`}
+          aria-label={`Open credential monitor. ${auth.label}: ${auth.details}${auth.provider === 'aws' ? ' Refresh AWS credentials.' : ''}`}
           disabled={authBusy}
           onClick={onAuthAction}
         >

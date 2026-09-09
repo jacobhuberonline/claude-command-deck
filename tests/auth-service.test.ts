@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { vi } from 'vitest';
+import { environmentForAwsProfile } from '../src/main/auth/AwsEnvironment';
 import { AuthService } from '../src/main/auth/AuthService';
 import type { SafeLogger } from '../src/main/logging/SafeLogger';
 import type { SettingsStore } from '../src/main/persistence/SettingsStore';
@@ -157,6 +158,41 @@ describe('authentication service check freshness', () => {
     expect(processMocks.spawn.mock.calls[1]?.[0]).toBe('probe-b');
   });
 
+  it('queues a fresh check when only the AWS profile changes', async () => {
+    let auth = { ...createAuthConfiguration('aws'), provider: 'aws' as const, awsProfile: 'first' };
+    const settingsStore = {
+      load: vi.fn(() => ({ auth })),
+    } as unknown as SettingsStore;
+    const firstProcess = new FakeCheckProcess();
+    const secondProcess = new FakeCheckProcess();
+    processMocks.spawn.mockReturnValueOnce(firstProcess).mockReturnValueOnce(secondProcess);
+    const service = new AuthService(settingsStore, createLogger(), {
+      onOutput: vi.fn(),
+      onExit: vi.fn(),
+    });
+
+    const firstCheck = service.check();
+    await vi.waitFor(() => expect(processMocks.spawn).toHaveBeenCalledTimes(1));
+    auth = { ...auth, awsProfile: 'second' };
+    const secondCheck = service.check();
+
+    expect(processMocks.spawn).toHaveBeenCalledTimes(1);
+    firstProcess.stderr.emit('data', 'first check failed');
+    firstProcess.emit('close', 1);
+    await vi.waitFor(() => expect(processMocks.spawn).toHaveBeenCalledTimes(2));
+    secondProcess.stdout.emit('data', JSON.stringify({ Account: '123456789012' }));
+    secondProcess.emit('close', 0);
+
+    await expect(firstCheck).resolves.toMatchObject({ status: 'disconnected' });
+    await expect(secondCheck).resolves.toMatchObject({ status: 'connected' });
+    expect(processMocks.spawn.mock.calls[0]?.[2]).toMatchObject({
+      env: { AWS_PROFILE: 'first' },
+    });
+    expect(processMocks.spawn.mock.calls[1]?.[2]).toMatchObject({
+      env: { AWS_PROFILE: 'second' },
+    });
+  });
+
   it('does not reuse a pre-login check for post-login verification', async () => {
     const auth = createAuthConfiguration('probe');
     auth.refreshExecutable = 'login';
@@ -266,6 +302,21 @@ describe('authentication service check freshness', () => {
         process.env.AWS_PROFILE = previous;
       }
     }
+  });
+
+  it('makes an explicit AWS profile authoritative over inherited temporary credentials', () => {
+    const environment = environmentForAwsProfile('bedrock-development', {
+      PATH: '/usr/bin',
+      AWS_ACCESS_KEY_ID: 'temporary-access-key',
+      AWS_SECRET_ACCESS_KEY: 'temporary-secret',
+      AWS_SESSION_TOKEN: 'expired-session-token',
+      AWS_BEARER_TOKEN_BEDROCK: 'expired-bearer-token',
+    });
+
+    expect(environment).toEqual({
+      PATH: '/usr/bin',
+      AWS_PROFILE: 'bedrock-development',
+    });
   });
 
   it('does not report an invalid AWS identity response as connected', async () => {

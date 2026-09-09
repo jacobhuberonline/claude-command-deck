@@ -362,7 +362,7 @@ export function createAuthStateFromConfiguration(auth: AuthConfiguration): AuthS
     label: auth.provider === 'aws' ? 'AWS not checked' : 'Custom check not run',
     details:
       auth.provider === 'aws'
-        ? 'Optional AWS credential monitor; it does not directly inspect running Claude sessions.'
-        : 'Optional custom credential monitor; it does not directly inspect running Claude sessions.',
+        ? 'Optional AWS credential monitor; credential errors reported by Claude override a successful check.'
+        : 'Optional custom credential monitor; credential errors reported by Claude override a successful check.',
   };
 }

@@ -11,6 +11,7 @@ export const defaultWindowBounds: Rectangle = {
 
 export interface WindowDisplay {
   bounds: Rectangle;
+  workArea?: Rectangle;
 }
 
 export interface PersistedWindowState {
@@ -25,12 +26,30 @@ export function normalizeWindowState(
   displays: WindowDisplay[],
 ): PersistedWindowState {
   const bounds = normalizeBounds(state?.bounds);
-  const visibleBounds = isVisibleOnAnyDisplay(bounds, displays) ? bounds : defaultWindowBounds;
+  const display = displays.reduce<WindowDisplay | undefined>((best, candidate) => {
+    if (!best) return candidate;
+    return intersectionArea(bounds, candidate.workArea ?? candidate.bounds) >
+      intersectionArea(bounds, best.workArea ?? best.bounds)
+      ? candidate
+      : best;
+  }, undefined);
+  const area = display?.workArea ?? display?.bounds;
+  const candidate = area && intersectionArea(bounds, area) === 0 ? defaultWindowBounds : bounds;
+  const width = area ? Math.min(candidate.width, area.width) : candidate.width;
+  const height = area ? Math.min(candidate.height, area.height) : candidate.height;
+  const visibleBounds = area
+    ? {
+        x: Math.max(area.x, Math.min(candidate.x, area.x + area.width - width)),
+        y: Math.max(area.y, Math.min(candidate.y, area.y + area.height - height)),
+        width,
+        height,
+      }
+    : candidate;
 
   return {
     bounds: visibleBounds,
     isMaximized: state?.isMaximized === true,
-    isFullScreen: state?.isFullScreen === true,
+    isFullScreen: false,
     isMinimized: state?.isMinimized === true,
   };
 }
@@ -50,14 +69,6 @@ export function normalizeBounds(bounds: Rectangle | undefined): Rectangle {
 
 function isFiniteRectangle(bounds: Rectangle) {
   return [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite);
-}
-
-function isVisibleOnAnyDisplay(bounds: Rectangle, displays: WindowDisplay[]) {
-  if (displays.length === 0) {
-    return true;
-  }
-
-  return displays.some((display) => intersectionArea(bounds, display.bounds) > 0);
 }
 
 function intersectionArea(a: Rectangle, b: Rectangle) {

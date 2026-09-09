@@ -10,6 +10,7 @@ import type { SafeLogger } from '../logging/SafeLogger';
 import type { SettingsStore } from '../persistence/SettingsStore';
 import { resolveCommand } from '../processes/CommandResolution';
 import { parseAwsCallerIdentity } from './AuthParsers';
+import { environmentForAwsProfile } from './AwsEnvironment';
 
 interface AuthServiceEvents {
   onOutput: (data: string) => void;
@@ -74,7 +75,7 @@ export class AuthService {
         cols: 100,
         rows: 24,
         cwd: auth.workingDirectory || process.cwd(),
-        env: process.env,
+        env: auth.provider === 'aws' ? environmentForAwsProfile(auth.awsProfile) : process.env,
       });
     } catch (error) {
       return {
@@ -226,6 +227,7 @@ export class AuthService {
           cwd: auth.workingDirectory || process.cwd(),
           shell: false,
           windowsHide: true,
+          env: auth.provider === 'aws' ? environmentForAwsProfile(auth.awsProfile) : process.env,
         });
       } catch (error) {
         finish({
@@ -341,6 +343,7 @@ export class AuthService {
 function authCheckConfigurationKey(auth: AuthConfiguration): string {
   return JSON.stringify({
     provider: auth.provider,
+    awsProfile: auth.awsProfile,
     checkExecutable: auth.checkExecutable,
     checkArgs: auth.checkArgs,
     workingDirectory: auth.workingDirectory,

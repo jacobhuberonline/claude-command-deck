@@ -3,6 +3,25 @@ import { writeWithActivityTracking } from '../src/renderer/services/activity/Act
 import type { TerminalBridge } from '../src/shared/ipc/contracts';
 
 describe('phase 7 activity classifier', () => {
+  it.each([
+    'API Error: token is expired',
+    'API Error: The security token included in the request is invalid',
+    'API Error: UnrecognizedClientException',
+    'InvalidClientTokenId',
+    'InvalidIdentityToken',
+    'TokenRefreshRequired',
+    'The SSO session associated with this profile has expired or is otherwise invalid',
+    'The SSO session needs to be refreshed',
+    'ExpiredTokenException: The security token included in the request is expired',
+  ])('recognizes Claude credential failures: %s', (output) => {
+    const classifier = new ActivityClassifier();
+
+    const result = classifier.recordOutput('session-1', output);
+
+    expect(result.activityState).toBe('authenticationMayBeRequired');
+    expect(result.events).toContain('session.authentication_may_be_required');
+  });
+
   it('detects possible permission prompts conservatively', () => {
     const classifier = new ActivityClassifier({ minimumActivityMs: 10000 });
 

@@ -502,8 +502,8 @@ function AuthenticationSettings({
     <>
       <h3>Credential monitor</h3>
       <p className="settings-hint">
-        This optional monitor does not directly inspect running Claude sessions. The AWS preset
-        checks local AWS credentials; a custom check reports only the command&apos;s exit status.
+        The AWS preset checks local AWS credentials; a custom check reports the command&apos;s exit
+        status. Credential errors reported by Claude revoke a successful monitor status.
       </p>
       <label className="settings-field">
         <span>Provider</span>

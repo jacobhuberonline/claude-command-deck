@@ -50,6 +50,6 @@ The renderer runs with `contextIsolation`, sandboxing, and no Node integration. 
 
 ## MVP Notes
 
-The app is Windows-first but includes macOS/Linux fallbacks for local validation. Claude continuation and naming support are discovered from the selected executable; the same executable is then launched. New installations begin with one empty session and the optional credential monitor disabled. When enabled, the monitor reports only its configured AWS or custom check; it does not directly inspect running Claude sessions.
+The app is Windows-first but includes macOS/Linux fallbacks for local validation. Claude continuation and naming support are discovered from the selected executable; the same executable is then launched. New installations begin with one empty session and the optional credential monitor disabled. When enabled, the monitor runs its configured AWS or custom check, and explicit credential errors reported by Claude revoke a successful status. A selected AWS profile is used consistently for the check, SSO login, and newly launched Claude processes.
 
 Up to 32 saved session profiles are supported. Terminal output is bounded and buffered only in renderer memory so switching sessions can reconstruct recent scrollback without persisting transcripts.

@@ -41,4 +41,34 @@ describe('phase 11 window state persistence', () => {
 
     expect(state.bounds).toEqual({ x: 12, y: 21, width: 1040, height: 720 });
   });
+
+  it('keeps the window above the Dock and below the menu bar on a small display', () => {
+    const state = normalizeWindowState(undefined, [
+      {
+        bounds: { x: 0, y: 0, width: 1280, height: 800 },
+        workArea: { x: 0, y: 25, width: 1280, height: 680 },
+      },
+    ]);
+    expect(state.bounds).toEqual({ x: 0, y: 25, width: 1280, height: 680 });
+  });
+
+  it('clamps a partially visible window to its secondary display work area', () => {
+    const state = normalizeWindowState(
+      {
+        bounds: { x: -1500, y: -50, width: 1200, height: 900 },
+      },
+      [
+        { bounds: { x: 0, y: 0, width: 1920, height: 1080 } },
+        {
+          bounds: { x: -1440, y: 0, width: 1440, height: 900 },
+          workArea: { x: -1440, y: 25, width: 1440, height: 800 },
+        },
+      ],
+    );
+    expect(state.bounds).toEqual({ x: -1440, y: 25, width: 1200, height: 800 });
+  });
+
+  it('reopens a saved full-screen window in desktop mode', () => {
+    expect(normalizeWindowState({ isFullScreen: true }, []).isFullScreen).toBe(false);
+  });
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useLayoutEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { GripVertical, Plus, Search, Trash2 } from 'lucide-react';
 import type {
   SessionConfiguration,
@@ -20,6 +20,7 @@ interface SessionGridProps {
   focusedSessionId: SessionId;
   focusMode: boolean;
   onFocusSession: (sessionId: SessionId) => void;
+  onVisibleSessionsChange: (sessionIds: SessionId[]) => void;
   onRequestTerminalFocus: () => void;
   onToggleFocusMode: () => void;
   onAddSession: () => void;
@@ -44,6 +45,7 @@ export function SessionGrid({
   focusedSessionId,
   focusMode,
   onFocusSession,
+  onVisibleSessionsChange,
   onRequestTerminalFocus,
   onToggleFocusMode,
   onAddSession,
@@ -88,6 +90,10 @@ export function SessionGrid({
       }),
     [filter, normalizedQuery, sessions],
   );
+
+  useLayoutEffect(() => {
+    onVisibleSessionsChange(filteredSessions.map((session) => session.configuration.id));
+  }, [filteredSessions, onVisibleSessionsChange]);
 
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
@@ -251,9 +257,9 @@ export function SessionGrid({
           </div>
 
           <div className="session-list" role="list">
-            {filteredSessions.map((session) => {
+            {filteredSessions.map((session, shortcutIndex) => {
               const { configuration, runtime } = session;
-              const shortcutIndex = sessions.findIndex(
+              const positionIndex = sessions.findIndex(
                 (candidate) => candidate.configuration.id === configuration.id,
               );
               const selected = configuration.id === focusedSessionId;
@@ -291,7 +297,7 @@ export function SessionGrid({
                     type="button"
                     draggable={sessions.length > 1}
                     disabled={sessions.length <= 1}
-                    aria-label={`Move ${configuration.name}, position ${shortcutIndex + 1} of ${sessions.length}`}
+                    aria-label={`Move ${configuration.name}, position ${positionIndex + 1} of ${sessions.length}`}
                     aria-keyshortcuts="ArrowUp ArrowDown"
                     title="Drag to reorder. Use Arrow Up or Arrow Down for keyboard reordering."
                     onDragStart={(event) => {

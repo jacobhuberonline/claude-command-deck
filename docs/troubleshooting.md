@@ -22,7 +22,7 @@ The app discovers the configured Claude executable at runtime. If diagnostics re
 
 ## Credential Monitor Reports A Failure
 
-The monitor reports only its configured provider check and does not directly inspect running Claude sessions, so a session may remain usable when an AWS or custom check fails. For the AWS preset, confirm that `aws sts get-caller-identity --output json` succeeds in a normal terminal. Configure a login command before using the interactive credential console.
+The monitor runs its configured provider check, while explicit credential errors reported by Claude revoke a successful status. A session may still remain usable when an AWS or custom check fails for an unrelated reason. For the AWS preset, confirm that `aws sts get-caller-identity --output json` succeeds in a normal terminal. Click the AWS status icon to refresh credentials even when the last identity check passed. Complete the login in the credential console, then retry Claude. A cancelled or failed login does not clear an expired-credential warning from Claude. After changing the selected AWS profile, restart the Claude session so the new process inherits that profile.
 
 ## Sounds Do Not Play
 

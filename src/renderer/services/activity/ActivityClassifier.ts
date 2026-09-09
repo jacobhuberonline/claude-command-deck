@@ -57,7 +57,12 @@ const permissionPromptPatterns = [
 const authenticationWarningPatterns = [
   /\bunable to locate credentials\b/i,
   /\bcould not load credentials\b/i,
-  /\bexpired(token| credentials| session)\b/i,
+  /\bexpiredtoken(?:exception)?\b/i,
+  /\b(?:expired|invalid) (?:api )?(?:token|credentials?|session)\b/i,
+  /\b(?:api )?(?:token|credentials?|session) (?:is |has )?(?:expired|invalid)\b/i,
+  /\bsecurity token\b.{0,80}\b(?:expired|invalid)\b/i,
+  /\b(?:UnrecognizedClientException|InvalidClientTokenId|InvalidIdentityToken|TokenRefreshRequired)\b/i,
+  /\bsso session\b.{0,80}\b(?:invalid|needs to be refreshed)\b/i,
   /\bsso session.*expired\b/i,
   /\b(?:credential|token|sso|authentication)\b.{0,80}\baccess denied\b/i,
   /\baccess denied\b.{0,80}\b(?:credential|token|sso|authentication)\b/i,

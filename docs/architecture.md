@@ -58,7 +58,7 @@ Fresh conversations receive a unique `--name` when supported. Later continuation
 
 ## Credential Monitoring
 
-Credential monitoring supports disabled, AWS preset, and custom command modes. It reports only the configured provider check and does not directly inspect running Claude sessions. Checks run with timeouts and do not overlap; configuration changes and login completion queue a fresh authoritative check instead of reusing an older result. AWS structured output parsing keeps only safe identity metadata. Login runs in a dedicated interactive PTY displayed in a credential console. Raw credential output is never persisted by default.
+Credential monitoring supports disabled, AWS preset, and custom command modes. Checks run with timeouts and do not overlap; configuration changes and login completion queue a fresh authoritative check instead of reusing an older result. Explicit credential errors in Claude terminal output revoke a successful status. The AWS credential action always starts login, including from a green status. A Claude credential warning clears only after a successful login and a fresh successful check. The selected AWS profile is made authoritative for the check, login, and newly launched Claude processes by removing inherited temporary credential overrides from those child environments. AWS structured output parsing keeps only safe identity metadata. Login runs in a dedicated interactive PTY displayed in a credential console. Raw credential output is never persisted by default.
 
 ## Audio And Notifications
 

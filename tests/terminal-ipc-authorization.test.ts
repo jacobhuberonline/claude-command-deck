@@ -54,7 +54,7 @@ describe('terminal IPC session authorization', () => {
   const resolvedExecutable = '/opt/bin/claude-custom';
   const processManagerMocks = {
     startShell: vi.fn(() => ({ ok: true as const })),
-    startClaude: vi.fn(() => ({
+    startClaude: vi.fn<ProcessManager['startClaude']>(() => ({
       ok: true as const,
       processId: 'process-claude-1',
     })),
@@ -250,6 +250,20 @@ describe('terminal IPC session authorization', () => {
       cols: 100,
       rows: 30,
     });
+  });
+
+  it('launches Claude with the AWS profile verified by the credential monitor', async () => {
+    settings.auth = {
+      ...settings.auth,
+      provider: 'aws',
+      awsProfile: 'bedrock-development',
+    };
+
+    const prepared = requirePrepared(await prepare(sessionId, 'new'));
+    await start(prepared);
+
+    const launchRequest = processManagerMocks.startClaude.mock.calls.at(-1)?.[0];
+    expect(launchRequest?.environment?.AWS_PROFILE).toBe('bedrock-development');
   });
 
   it('generates a different tightly-scoped name for each later fresh conversation', async () => {

@@ -103,7 +103,7 @@ describe('phase 13 authentication refresh orchestration', () => {
     expect(startRefresh).not.toHaveBeenCalled();
     expect(
       await screen.findByRole('button', {
-        name: /AWS credential check passed.*does not directly inspect running Claude sessions/i,
+        name: /AWS credential check passed.*credential errors reported by Claude override/i,
       }),
     ).toBeInTheDocument();
   });
@@ -165,7 +165,7 @@ describe('phase 13 authentication refresh orchestration', () => {
     });
     await waitFor(() =>
       expect(authButton).toHaveAccessibleName(
-        /AWS credential check passed.*does not directly inspect running Claude sessions/i,
+        /AWS credential check passed.*credential errors reported by Claude override/i,
       ),
     );
   });
@@ -217,7 +217,7 @@ describe('phase 13 authentication refresh orchestration', () => {
     expect(startRefresh).not.toHaveBeenCalled();
     expect(
       await screen.findByRole('button', {
-        name: /AWS credential check passed.*does not directly inspect running Claude sessions/i,
+        name: /AWS credential check passed.*credential errors reported by Claude override/i,
       }),
     ).toBeInTheDocument();
   });
@@ -248,16 +248,7 @@ describe('phase 13 authentication refresh orchestration', () => {
     const postExitCheck = new Promise<AuthCheckResult>((resolve) => {
       resolvePostExitCheck = resolve;
     });
-    const disconnectedResult = {
-      status: 'disconnected' as const,
-      checkedAt: new Date().toISOString(),
-      error: 'Credentials expired.',
-    };
-    const check = vi
-      .fn<CommandDeckBridge['auth']['check']>()
-      .mockResolvedValueOnce(disconnectedResult)
-      .mockResolvedValueOnce(disconnectedResult)
-      .mockReturnValueOnce(postExitCheck);
+    const check = vi.fn<CommandDeckBridge['auth']['check']>().mockReturnValueOnce(postExitCheck);
     const startRefresh = vi.fn(() => Promise.resolve({ ok: true as const }));
     window.commandDeck = createMockBridge(snapshot, {
       check,
@@ -276,7 +267,7 @@ describe('phase 13 authentication refresh orchestration', () => {
     act(() => {
       exitListener?.({ exitCode: 0, signal: null });
     });
-    await waitFor(() => expect(check).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('button', { name: 'Start login' }));
     await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(2));
@@ -294,6 +285,132 @@ describe('phase 13 authentication refresh orchestration', () => {
         name: /AWS credential login running/i,
       }),
     ).toBeInTheDocument();
+  });
+
+  it.each([0, 1, 130])(
+    'refreshes from green and preserves Claude rejection after login exit %s',
+    async (exitCode) => {
+      const snapshot = createPhaseOneState('test');
+      snapshot.settings.auth = {
+        ...snapshot.settings.auth,
+        provider: 'aws',
+        checkExecutable: 'aws',
+        checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
+        refreshExecutable: 'aws',
+        refreshArgs: ['sso', 'login'],
+        startupChecksEnabled: false,
+      };
+      snapshot.auth = {
+        provider: 'aws',
+        status: 'connected',
+        label: 'AWS credential check passed',
+        details: 'Previously verified.',
+        lastCheckedAt: new Date().toISOString(),
+      };
+      let outputListener: Parameters<CommandDeckBridge['terminal']['onOutput']>[0] | undefined;
+      let exitListener: Parameters<CommandDeckBridge['auth']['onExit']>[0] | undefined;
+      const check = vi.fn<CommandDeckBridge['auth']['check']>(() =>
+        Promise.resolve({
+          status: 'connected',
+          checkedAt: new Date().toISOString(),
+        }),
+      );
+      const startRefresh = vi.fn(() => Promise.resolve({ ok: true as const }));
+      const bridge = createMockBridge(snapshot, {
+        check,
+        startRefresh,
+        onExit: (listener) => {
+          exitListener = listener;
+          return () => undefined;
+        },
+      });
+      bridge.terminal.onOutput = (listener) => {
+        outputListener = listener;
+        return () => undefined;
+      };
+      window.commandDeck = bridge;
+      render(<App />);
+      fireEvent.click(await screen.findByRole('button', { name: /AWS credential check passed/i }));
+      await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(1));
+      expect(check).not.toHaveBeenCalled();
+      act(() => {
+        outputListener?.({
+          sessionId: snapshot.settings.sessions[0]!.id,
+          processId: 'claude-1',
+          data: 'API Error: token expired',
+        });
+        exitListener?.({ exitCode, signal: exitCode === 130 ? 'SIGTERM' : null });
+      });
+      await waitFor(() => expect(check).toHaveBeenCalledTimes(1));
+      if (exitCode === 0) {
+        expect(
+          await screen.findByRole('button', { name: /AWS credential check passed/i }),
+        ).toBeInTheDocument();
+      } else {
+        const button = await screen.findByRole('button', {
+          name: /Complete credential login before retrying/i,
+        });
+        expect(button).toHaveClass('auth-disconnected');
+        fireEvent.click(button);
+        await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(2));
+        expect(check).toHaveBeenCalledTimes(1);
+      }
+    },
+  );
+
+  it.each([
+    'ExpiredTokenException: The security token included in the request is expired',
+    'API Error: The security token included in the request is invalid',
+    'API Error: UnrecognizedClientException',
+  ])('revokes a green AWS status and starts login for %s', async (data) => {
+    const snapshot = createPhaseOneState('test');
+    const checkedAt = new Date().toISOString();
+    snapshot.settings.auth = {
+      ...snapshot.settings.auth,
+      provider: 'aws',
+      checkExecutable: 'aws',
+      checkArgs: ['sts', 'get-caller-identity', '--output', 'json'],
+      refreshExecutable: 'aws',
+      refreshArgs: ['sso', 'login'],
+      startupChecksEnabled: false,
+    };
+    snapshot.auth = {
+      provider: 'aws',
+      status: 'connected',
+      label: 'AWS credential check passed',
+      details: 'Previously verified.',
+      lastCheckedAt: checkedAt,
+      lastSuccessfulCheckAt: checkedAt,
+    };
+
+    let outputListener: Parameters<CommandDeckBridge['terminal']['onOutput']>[0] | undefined;
+    const check = vi.fn<CommandDeckBridge['auth']['check']>();
+    const startRefresh = vi.fn(() => Promise.resolve({ ok: true as const }));
+    const bridge = createMockBridge(snapshot, { check, startRefresh });
+    bridge.terminal.onOutput = vi.fn<CommandDeckBridge['terminal']['onOutput']>((listener) => {
+      outputListener = listener;
+      return () => undefined;
+    });
+    window.commandDeck = bridge;
+
+    render(<App />);
+    await screen.findByRole('button', { name: /AWS credential check passed/i });
+
+    act(() => {
+      outputListener?.({
+        sessionId: snapshot.settings.sessions[0]!.id,
+        processId: 'process-claude-1',
+        data,
+      });
+    });
+
+    const authButton = await screen.findByRole('button', {
+      name: /AWS credential rejected by Claude/i,
+    });
+    fireEvent.click(authButton);
+
+    await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(1));
+    expect(check).not.toHaveBeenCalled();
   });
 });
 

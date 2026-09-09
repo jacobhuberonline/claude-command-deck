@@ -14,6 +14,7 @@ export interface PtyProcessOptions {
   workingDirectory: string;
   executable: string;
   args: string[];
+  environment?: NodeJS.ProcessEnv;
   cols: number;
   rows: number;
   logger: SafeLogger;
@@ -46,7 +47,7 @@ export class PtyProcess {
         cols: this.options.cols,
         rows: this.options.rows,
         cwd: this.options.workingDirectory,
-        env: process.env,
+        env: this.options.environment ?? process.env,
       });
     } catch (error) {
       this.state = 'error';

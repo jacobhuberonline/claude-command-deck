@@ -29,6 +29,7 @@ interface ResolvedClaudeStartRequest {
   workingDirectory: string;
   executable: string;
   args: string[];
+  environment?: NodeJS.ProcessEnv;
   cols: number;
   rows: number;
 }
@@ -77,6 +78,7 @@ export class ProcessManager {
       workingDirectory: request.workingDirectory,
       executable,
       args: request.args,
+      ...(request.environment ? { environment: request.environment } : {}),
       cols: request.cols,
       rows: request.rows,
       logLabel: 'Claude session started',
@@ -189,6 +191,7 @@ export class ProcessManager {
     workingDirectory,
     executable,
     args,
+    environment,
     cols,
     rows,
     logLabel,
@@ -199,6 +202,7 @@ export class ProcessManager {
     workingDirectory: string;
     executable: string;
     args: string[];
+    environment?: NodeJS.ProcessEnv;
     cols: number;
     rows: number;
     logLabel: string;
@@ -228,6 +232,7 @@ export class ProcessManager {
       workingDirectory: directory,
       executable,
       args,
+      ...(environment ? { environment } : {}),
       cols,
       rows,
       logger: this.logger,

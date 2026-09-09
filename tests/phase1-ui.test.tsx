@@ -108,6 +108,52 @@ describe('phase 1 visual shell', () => {
     expect(document.activeElement).not.toBe(search);
   });
 
+  it.each(['search', 'running', 'attention'])(
+    'numbers and selects the visible %s results',
+    async (view) => {
+      const snapshot = createMultiSessionState();
+      snapshot.settings.auth.startupChecksEnabled = false;
+      for (const session of snapshot.sessions.slice(2)) {
+        session.configuration.workingDirectory = '/projects/matching';
+        session.runtime.processState = 'running';
+        session.runtime.attention = true;
+      }
+      window.commandDeck = createMockBridge(snapshot);
+      render(<App />);
+      const search = await screen.findByRole('searchbox', { name: 'Find a session' });
+      if (view === 'search') {
+        fireEvent.change(search, { target: { value: 'matching' } });
+        search.focus();
+      } else {
+        fireEvent.click(
+          screen.getByRole('button', { name: view === 'running' ? 'Running 2' : 'Attention 2' }),
+        );
+      }
+      expect(screen.getByRole('button', { name: /^1 Session 3,/ })).toHaveTextContent('1');
+      expect(screen.getByRole('button', { name: /^2 Session 4,/ })).toHaveTextContent('2');
+      const status = screen.getByRole('contentinfo', { name: 'Application status' });
+      fireEvent.keyDown(view === 'search' ? search : window, {
+        altKey: true,
+        key: 'Unidentified',
+        code: 'Digit1',
+      });
+      expect(within(status).getByText('Session 3')).toBeInTheDocument();
+      expect(document.activeElement).not.toBe(search);
+      fireEvent.keyDown(window, { altKey: true, key: '2', code: 'Digit2' });
+      expect(within(status).getByText('Session 4')).toBeInTheDocument();
+      fireEvent.keyDown(window, { altKey: true, key: '3', code: 'Digit3' });
+      expect(within(status).getByText('Session 4')).toBeInTheDocument();
+      fireEvent.change(search, { target: { value: '' } });
+      fireEvent.click(screen.getByRole('button', { name: 'All' }));
+      expect(screen.getByRole('button', { name: /^1 Session 1,/ })).toBeInTheDocument();
+      fireEvent.keyDown(window, { altKey: true, key: '1', code: 'Digit1' });
+      expect(within(status).getByText('Session 1')).toBeInTheDocument();
+      fireEvent.change(search, { target: { value: 'no matching session exists' } });
+      fireEvent.keyDown(window, { altKey: true, key: '2', code: 'Digit2' });
+      expect(within(status).getByText('Session 1')).toBeInTheDocument();
+    },
+  );
+
   it('opens the settings shell from the command bar', async () => {
     render(<App />);
 
@@ -912,7 +958,7 @@ describe('phase 1 visual shell', () => {
     await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
   });
 
-  it('verifies connected auth and starts refresh from one action when the check fails', async () => {
+  it('starts AWS refresh directly when the green credential action is clicked', async () => {
     const snapshot = createPhaseOneState('test');
     const lastCheckedAt = new Date().toISOString();
     snapshot.settings.auth = {
@@ -958,7 +1004,7 @@ describe('phase 1 visual shell', () => {
 
     fireEvent.click(authButton);
 
-    await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
+    expect(check).not.toHaveBeenCalled();
     await waitFor(() => expect(startRefresh).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Credential login console test adapter')).toBeInTheDocument();
   });

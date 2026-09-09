@@ -29,6 +29,7 @@ import {
   terminalStopRequestSchema,
   terminalWriteRequestSchema,
 } from '../../shared/schemas/ipc';
+import { environmentForAwsProfile } from '../auth/AwsEnvironment';
 import { discoverClaude } from '../claude/ClaudeDiscovery';
 import type { ProcessManager } from '../processes/ProcessManager';
 import { listShellOptionsAsync } from '../processes/ShellDiscovery';
@@ -237,6 +238,7 @@ export function registerTerminalHandlers(
       workingDirectory: plan.workingDirectory,
       executable: plan.executable,
       args: plan.args,
+      ...claudeAwsEnvironment(settings),
       cols: payload.data.cols,
       rows: payload.data.rows,
     });
@@ -463,6 +465,11 @@ function createLaunchProfileFingerprint(
     },
     claudeExecutable: settings.claudeExecutable,
     claudeBaseArgs: settings.claudeBaseArgs,
+    authProvider: settings.auth.provider,
+    awsProfile:
+      settings.auth.provider === 'aws'
+        ? settings.auth.awsProfile.trim() || process.env.AWS_PROFILE?.trim() || ''
+        : '',
     directoryPeers: settings.sessions
       .map((candidate) => ({
         id: candidate.id,
@@ -471,6 +478,12 @@ function createLaunchProfileFingerprint(
       }))
       .sort((left, right) => left.id.localeCompare(right.id)),
   });
+}
+
+function claudeAwsEnvironment(settings: ApplicationSettings): { environment?: NodeJS.ProcessEnv } {
+  return settings.auth.provider === 'aws'
+    ? { environment: environmentForAwsProfile(settings.auth.awsProfile) }
+    : {};
 }
 
 function pruneClaudeLaunchPlans(

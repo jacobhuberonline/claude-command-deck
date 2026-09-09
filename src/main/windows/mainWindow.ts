@@ -15,8 +15,8 @@ export function createMainWindow(): BrowserWindow {
     y: restoredBounds.y,
     width: restoredBounds.width,
     height: restoredBounds.height,
-    minWidth: 1040,
-    minHeight: 720,
+    minWidth: Math.min(1040, restoredBounds.width),
+    minHeight: Math.min(720, restoredBounds.height),
     title: 'Claude Command Deck',
     backgroundColor: '#07090c',
     show: false,
@@ -34,9 +34,7 @@ export function createMainWindow(): BrowserWindow {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    if (windowState.isFullScreen) {
-      mainWindow.setFullScreen(true);
-    } else if (windowState.isMaximized) {
+    if (windowState.isMaximized) {
       mainWindow.maximize();
     }
 
