@@ -26,7 +26,7 @@ credentials or provider configuration.
 - Drag navigator handles to arrange sessions, or focus a handle and use `Arrow Up`/`Arrow Down`; the order is saved.
 - Jump to the first nine saved sessions with `Alt+1` through `Alt+9`.
 - Cycle sessions with `Ctrl+PageUp` and `Ctrl+PageDown`.
-- Focus session search with `Ctrl+Shift+P`.
+- Focus session search with `Ctrl+Shift+K`.
 - Start a fresh named Claude conversation, continue that exact conversation later, open the native resume picker, or choose a detected shell for a normal terminal session.
 - Add an optional per-session Haiku, Sonnet, Opus, or custom model override; blank sessions keep the configured default launch arguments.
 - Tune the completion quiet period, focus suppression, and per-session cues in **Settings → Audio**; waiting and permission cues remain audible while watched.

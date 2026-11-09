@@ -295,7 +295,7 @@ function GeneralSettings({
       <h3>Session management</h3>
       <Field label="Saved sessions" value={String(appState.sessions.length)} />
       <Field label="Quick switch" value="Alt+1…9 or Ctrl+PageUp / Ctrl+PageDown" />
-      <Field label="Find sessions" value="Ctrl+Shift+P" />
+      <Field label="Find sessions" value="Ctrl+Shift+K" />
       <Field label="Add a directory" value="Alt+N" />
       <Field
         label="Terminal transcripts"

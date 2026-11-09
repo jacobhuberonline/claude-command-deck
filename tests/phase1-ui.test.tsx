@@ -56,6 +56,20 @@ describe('phase 1 visual shell', () => {
     expect(screen.getByRole('button', { name: 'Show session navigator' })).toBeInTheDocument();
   });
 
+  it('focuses session search with Ctrl+Shift+K instead of Ctrl+Shift+P', async () => {
+    render(<App />);
+
+    const search = await screen.findByRole('searchbox', { name: 'Find a session' });
+    const settings = screen.getByRole('button', { name: 'Open Settings' });
+    settings.focus();
+
+    fireEvent.keyDown(window, { key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true });
+    expect(document.activeElement).toBe(settings);
+
+    fireEvent.keyDown(window, { key: 'K', code: 'KeyK', ctrlKey: true, shiftKey: true });
+    await waitFor(() => expect(document.activeElement).toBe(search));
+  });
+
   it('keeps placeholder session controls unavailable until saved state loads', async () => {
     const snapshot = createPhaseOneState('test');
     snapshot.settings.auth.startupChecksEnabled = false;

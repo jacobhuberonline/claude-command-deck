@@ -890,7 +890,7 @@ export function App() {
       if (
         (event.ctrlKey || event.metaKey) &&
         event.shiftKey &&
-        (event.key.toLowerCase() === 'p' || event.code === 'KeyP')
+        (event.key.toLowerCase() === 'k' || event.code === 'KeyK')
       ) {
         event.preventDefault();
         focusSessionSearch();
@@ -2042,7 +2042,7 @@ export function App() {
         <span>{focusedSession?.configuration.name ?? 'No focused session'}</span>
         <span>Alt+1…9 jump</span>
         <span>Ctrl+PgUp/PgDn cycle</span>
-        <span>Ctrl+Shift+P find</span>
+        <span>Ctrl+Shift+K find</span>
         <span>Alt+N add</span>
         <span>v{appState.appVersion}</span>
       </footer>
